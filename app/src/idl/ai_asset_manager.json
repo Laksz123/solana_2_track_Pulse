@@ -1,0 +1,157 @@
+{
+  "version": "0.1.0",
+  "name": "ai_asset_manager",
+  "instructions": [
+    {
+      "name": "createAgent",
+      "accounts": [
+        { "name": "agent", "isMut": true, "isSigner": false },
+        { "name": "owner", "isMut": true, "isSigner": true },
+        { "name": "systemProgram", "isMut": false, "isSigner": false }
+      ],
+      "args": [
+        { "name": "strategy", "type": "u8" }
+      ]
+    },
+    {
+      "name": "deposit",
+      "accounts": [
+        { "name": "agent", "isMut": true, "isSigner": false },
+        { "name": "owner", "isMut": true, "isSigner": true },
+        { "name": "systemProgram", "isMut": false, "isSigner": false }
+      ],
+      "args": [
+        { "name": "amount", "type": "u64" }
+      ]
+    },
+    {
+      "name": "withdraw",
+      "accounts": [
+        { "name": "agent", "isMut": true, "isSigner": false },
+        { "name": "owner", "isMut": true, "isSigner": true }
+      ],
+      "args": [
+        { "name": "amount", "type": "u64" }
+      ]
+    },
+    {
+      "name": "updateStrategy",
+      "accounts": [
+        { "name": "agent", "isMut": true, "isSigner": false },
+        { "name": "owner", "isMut": true, "isSigner": true }
+      ],
+      "args": [
+        { "name": "strategy", "type": "u8" }
+      ]
+    },
+    {
+      "name": "logAiDecision",
+      "accounts": [
+        { "name": "decisionLog", "isMut": true, "isSigner": false },
+        { "name": "agent", "isMut": false, "isSigner": false },
+        { "name": "owner", "isMut": true, "isSigner": true },
+        { "name": "systemProgram", "isMut": false, "isSigner": false }
+      ],
+      "args": [
+        { "name": "action", "type": "u8" },
+        { "name": "tokenId", "type": "u8" },
+        { "name": "amount", "type": "u64" },
+        { "name": "price", "type": "u64" },
+        { "name": "confidence", "type": "u8" },
+        { "name": "reasoningHash", "type": { "array": ["u8", 32] } }
+      ]
+    },
+    {
+      "name": "executeTrade",
+      "accounts": [
+        { "name": "agent", "isMut": true, "isSigner": false },
+        { "name": "owner", "isMut": true, "isSigner": true }
+      ],
+      "args": [
+        { "name": "action", "type": "u8" },
+        { "name": "tokenId", "type": "u8" },
+        { "name": "amount", "type": "u64" },
+        { "name": "price", "type": "u64" }
+      ]
+    }
+  ],
+  "accounts": [
+    {
+      "name": "Agent",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          { "name": "owner", "type": "publicKey" },
+          { "name": "balance", "type": "u64" },
+          { "name": "strategy", "type": "u8" },
+          { "name": "positionsCount", "type": "u8" },
+          {
+            "name": "positions",
+            "type": { "array": [{ "defined": "TokenPosition" }, 5] }
+          },
+          { "name": "historyCount", "type": "u8" },
+          {
+            "name": "history",
+            "type": { "array": [{ "defined": "TradeRecord" }, 20] }
+          },
+          { "name": "bump", "type": "u8" }
+        ]
+      }
+    },
+    {
+      "name": "AIDecisionLog",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          { "name": "agent", "type": "publicKey" },
+          { "name": "owner", "type": "publicKey" },
+          { "name": "action", "type": "u8" },
+          { "name": "tokenId", "type": "u8" },
+          { "name": "amount", "type": "u64" },
+          { "name": "price", "type": "u64" },
+          { "name": "confidence", "type": "u8" },
+          { "name": "reasoningHash", "type": { "array": ["u8", 32] } },
+          { "name": "timestamp", "type": "i64" },
+          { "name": "bump", "type": "u8" }
+        ]
+      }
+    }
+  ],
+  "types": [
+    {
+      "name": "TokenPosition",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          { "name": "tokenId", "type": "u8" },
+          { "name": "amount", "type": "u64" },
+          { "name": "avgPrice", "type": "u64" }
+        ]
+      }
+    },
+    {
+      "name": "TradeRecord",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          { "name": "action", "type": "u8" },
+          { "name": "tokenId", "type": "u8" },
+          { "name": "amount", "type": "u64" },
+          { "name": "price", "type": "u64" },
+          { "name": "timestamp", "type": "i64" }
+        ]
+      }
+    }
+  ],
+  "errors": [
+    { "code": 6000, "name": "InvalidAmount", "msg": "Invalid amount" },
+    { "code": 6001, "name": "InsufficientBalance", "msg": "Insufficient balance" },
+    { "code": 6002, "name": "InsufficientPosition", "msg": "Insufficient position" },
+    { "code": 6003, "name": "PositionNotFound", "msg": "Position not found" },
+    { "code": 6004, "name": "MaxPositionsReached", "msg": "Maximum positions reached" },
+    { "code": 6005, "name": "InvalidAction", "msg": "Invalid action" }
+  ],
+  "metadata": {
+    "address": "DuRZJW1RmWrhZg41opM5kV3vnUzjCREgq1ySsTTAWWp3"
+  }
+}
