@@ -70,6 +70,14 @@ import {
   sendTradeAlert,
   sendPnLReport,
 } from "@/lib/telegram-bot";
+import {
+  MLPredictor,
+  MLConfig,
+  DEFAULT_ML_CONFIG,
+  MLMetrics,
+  MLPrediction,
+  MLTrainProgress,
+} from "@/lib/ml-predictor";
 
 // ==================== CONSTANTS ====================
 
@@ -240,6 +248,15 @@ export default function Home() {
     return () => { if (tgReportTimerRef.current) clearInterval(tgReportTimerRef.current); };
   }, [tgSettings.enabled, tgSettings.sendPnLReports, tgSettings.reportIntervalMin, tgSettings.botToken, tgSettings.chatId, agent.balanceUSD, agent.positions]);
 
+  // ML Predictor
+  const mlPredictorRef = useRef(new MLPredictor(DEFAULT_ML_CONFIG));
+  const [mlMetrics, setMlMetrics] = useState<MLMetrics | null>(null);
+  const [mlPrediction, setMlPrediction] = useState<MLPrediction | null>(null);
+  const [mlTraining, setMlTraining] = useState(false);
+  const [mlProgress, setMlProgress] = useState<MLTrainProgress | null>(null);
+  const [showMlPanel, setShowMlPanel] = useState(false);
+  const [mlConfig, setMlConfig] = useState<MLConfig>(DEFAULT_ML_CONFIG);
+
   // ==================== TOGGLE LOG ====================
 
   const toggleLog = useCallback((id: string) => {
@@ -336,6 +353,50 @@ export default function Home() {
     }
     setBacktestRunning(false);
   }, [backtestConfig, lang, addToast]);
+
+  const handleTrainML = useCallback(async () => {
+    setMlTraining(true);
+    setMlProgress(null);
+    setMlMetrics(null);
+    setMlPrediction(null);
+
+    try {
+      // Fetch candle data for selected coin
+      const coinId = assets.length > 0 ? assets[0].id : "bitcoin";
+      const ohlcRaw = await fetchOHLC(coinId, 90);
+      // Convert market-data OHLCV (time) to ML OHLCV (timestamp)
+      let mlCandles = ohlcRaw.map((c) => ({ timestamp: c.time, open: c.open, high: c.high, low: c.low, close: c.close, volume: c.volume }));
+      if (mlCandles.length < 30) {
+        const hist = await fetchPriceHistory(coinId, 90);
+        mlCandles = hist.prices.map(([ts, price]: number[]) => ({
+          timestamp: Math.floor(ts / 1000), open: price, high: price * 1.001,
+          low: price * 0.999, close: price, volume: 0,
+        }));
+      }
+      if (mlCandles.length < 30) {
+        addToast(lang === "ru" ? "Недостаточно данных для обучения" : "Insufficient data for training", "error");
+        setMlTraining(false);
+        return;
+      }
+
+      mlPredictorRef.current = new MLPredictor(mlConfig);
+      const metrics = await mlPredictorRef.current.train(mlCandles, (p) => setMlProgress(p));
+      setMlMetrics(metrics);
+
+      // Run prediction on latest data
+      const pred = mlPredictorRef.current.predict(mlCandles);
+      setMlPrediction(pred);
+
+      addToast(
+        `ML: Train ${(metrics.trainAccuracy * 100).toFixed(0)}% | Test ${(metrics.testAccuracy * 100).toFixed(0)}% | ${metrics.totalSamples} samples`,
+        metrics.testAccuracy > 0.52 ? "success" : "info",
+      );
+    } catch (err: any) {
+      console.error("ML train error:", err);
+      addToast(`ML error: ${err.message || err}`, "error");
+    }
+    setMlTraining(false);
+  }, [assets, mlConfig, lang, addToast]);
 
   const createAgent = useCallback(async () => {
     setIsProcessing(true);
@@ -1666,6 +1727,176 @@ export default function Home() {
                 <>{t("tg.test", lang)}</>
               )}
             </button>
+          </div>
+        )}
+      </div>
+
+      {/* ML PREDICTOR */}
+      <div className="card p-4 mt-3">
+        <div className="flex items-center justify-between mb-2">
+          <div className="flex items-center gap-2">
+            <p className="text-xs text-gray-500 uppercase tracking-wide font-semibold">{t("ml.title", lang)}</p>
+            {mlMetrics && (
+              <span className={`tag text-[10px] ${mlMetrics.testAccuracy > 0.52 ? "bg-green-500/10 text-green-400" : "bg-yellow-500/10 text-yellow-400"}`}>
+                Test: {(mlMetrics.testAccuracy * 100).toFixed(0)}%
+              </span>
+            )}
+            {mlPrediction && (
+              <span className={`tag text-[10px] ${mlPrediction.direction === "UP" ? "bg-green-500/10 text-green-400" : "bg-red-500/10 text-red-400"}`}>
+                {mlPrediction.direction === "UP" ? "↑" : "↓"} {t(mlPrediction.direction === "UP" ? "ml.up" : "ml.down", lang)} {(mlPrediction.confidence * 100).toFixed(0)}%
+              </span>
+            )}
+          </div>
+          <button onClick={() => setShowMlPanel((v) => !v)}
+            className="btn-secondary px-2.5 py-1 text-[10px] flex items-center gap-1">
+            {showMlPanel ? <ChevronUp className="w-3 h-3" /> : <ChevronDown className="w-3 h-3" />}
+            {showMlPanel ? (lang === "ru" ? "Скрыть" : "Hide") : (lang === "ru" ? "Подробнее" : "Details")}
+          </button>
+        </div>
+
+        {showMlPanel && (
+          <div className="space-y-3 mt-2">
+            {/* Config row */}
+            <div className="grid grid-cols-4 gap-2">
+              <div>
+                <label className="text-[10px] text-gray-500 uppercase">{t("ml.hidden_size", lang)}</label>
+                <select value={mlConfig.hiddenSize} onChange={(e) => setMlConfig((c) => ({ ...c, hiddenSize: Number(e.target.value) }))}
+                  className="w-full mt-0.5 bg-[#12141c] border border-gray-800 rounded px-1.5 py-1 text-xs text-gray-300 focus:outline-none">
+                  <option value={16}>16</option><option value={32}>32</option><option value={64}>64</option>
+                </select>
+              </div>
+              <div>
+                <label className="text-[10px] text-gray-500 uppercase">{t("ml.epochs", lang)}</label>
+                <select value={mlConfig.epochs} onChange={(e) => setMlConfig((c) => ({ ...c, epochs: Number(e.target.value) }))}
+                  className="w-full mt-0.5 bg-[#12141c] border border-gray-800 rounded px-1.5 py-1 text-xs text-gray-300 focus:outline-none">
+                  <option value={50}>50</option><option value={100}>100</option><option value={200}>200</option>
+                </select>
+              </div>
+              <div>
+                <label className="text-[10px] text-gray-500 uppercase">{t("ml.lookback", lang)}</label>
+                <select value={mlConfig.lookback} onChange={(e) => setMlConfig((c) => ({ ...c, lookback: Number(e.target.value) }))}
+                  className="w-full mt-0.5 bg-[#12141c] border border-gray-800 rounded px-1.5 py-1 text-xs text-gray-300 focus:outline-none">
+                  <option value={7}>7</option><option value={14}>14</option><option value={21}>21</option>
+                </select>
+              </div>
+              <div className="flex items-end">
+                <button onClick={handleTrainML} disabled={mlTraining}
+                  className="btn-primary px-3 py-1.5 text-xs w-full flex items-center justify-center gap-1 disabled:opacity-50">
+                  {mlTraining ? (
+                    <><Loader2 className="w-3.5 h-3.5 animate-spin" />{mlProgress ? `${mlProgress.epoch}/${mlProgress.totalEpochs}` : t("ml.training", lang)}</>
+                  ) : (
+                    <>{t("ml.train", lang)}</>
+                  )}
+                </button>
+              </div>
+            </div>
+
+            {/* Training progress */}
+            {mlTraining && mlProgress && (
+              <div>
+                <div className="flex justify-between text-[10px] text-gray-500 mb-1">
+                  <span>{t("ml.progress", lang)}: {mlProgress.epoch}/{mlProgress.totalEpochs}</span>
+                  <span>Loss: {mlProgress.trainLoss.toFixed(4)} | Train: {(mlProgress.trainAcc * 100).toFixed(0)}% | Test: {(mlProgress.testAcc * 100).toFixed(0)}%</span>
+                </div>
+                <div className="w-full bg-[#12141c] rounded-full h-1.5">
+                  <div className="bg-blue-500 rounded-full h-1.5 transition-all" style={{ width: `${(mlProgress.epoch / mlProgress.totalEpochs) * 100}%` }} />
+                </div>
+              </div>
+            )}
+
+            {/* Results */}
+            {mlMetrics && (
+              <div className="space-y-3">
+                {/* Metrics grid */}
+                <div className="grid grid-cols-5 gap-2">
+                  <div className="bg-[#12141c] rounded-lg p-2 text-center">
+                    <p className="text-[10px] text-gray-500 uppercase">{t("ml.train_acc", lang)}</p>
+                    <p className={`text-sm font-bold ${mlMetrics.trainAccuracy > 0.55 ? "text-green-400" : "text-yellow-400"}`}>
+                      {(mlMetrics.trainAccuracy * 100).toFixed(1)}%
+                    </p>
+                  </div>
+                  <div className="bg-[#12141c] rounded-lg p-2 text-center">
+                    <p className="text-[10px] text-gray-500 uppercase">{t("ml.test_acc", lang)}</p>
+                    <p className={`text-sm font-bold ${mlMetrics.testAccuracy > 0.52 ? "text-green-400" : "text-red-400"}`}>
+                      {(mlMetrics.testAccuracy * 100).toFixed(1)}%
+                    </p>
+                  </div>
+                  <div className="bg-[#12141c] rounded-lg p-2 text-center">
+                    <p className="text-[10px] text-gray-500 uppercase">{t("ml.samples", lang)}</p>
+                    <p className="text-sm font-bold text-gray-200">{mlMetrics.totalSamples}</p>
+                  </div>
+                  <div className="bg-[#12141c] rounded-lg p-2 text-center">
+                    <p className="text-[10px] text-gray-500 uppercase">{t("ml.epochs", lang)}</p>
+                    <p className="text-sm font-bold text-gray-200">{mlMetrics.epochsRun}</p>
+                  </div>
+                  <div className="bg-[#12141c] rounded-lg p-2 text-center">
+                    <p className="text-[10px] text-gray-500 uppercase">{t("ml.loss", lang)}</p>
+                    <p className="text-sm font-bold text-gray-200">{mlMetrics.trainLoss.toFixed(4)}</p>
+                  </div>
+                </div>
+
+                {/* Current prediction */}
+                {mlPrediction && (
+                  <div className={`rounded-lg p-3 border ${mlPrediction.direction === "UP" ? "bg-green-500/5 border-green-500/20" : "bg-red-500/5 border-red-500/20"}`}>
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-2">
+                        <span className={`text-lg font-bold ${mlPrediction.direction === "UP" ? "text-green-400" : "text-red-400"}`}>
+                          {mlPrediction.direction === "UP" ? "↑" : "↓"} {t(mlPrediction.direction === "UP" ? "ml.up" : "ml.down", lang)}
+                        </span>
+                        <span className="text-xs text-gray-400">
+                          {t("ml.confidence", lang)}: {(mlPrediction.confidence * 100).toFixed(0)}%
+                        </span>
+                      </div>
+                      <div className="text-right">
+                        <p className="text-[10px] text-gray-500 uppercase">{t("ml.target", lang)}</p>
+                        <p className="text-sm font-mono text-gray-200">${fmtUSD(mlPrediction.priceTarget)}</p>
+                      </div>
+                    </div>
+                  </div>
+                )}
+
+                {/* Feature importance */}
+                <div>
+                  <p className="text-[10px] text-gray-500 uppercase mb-1.5">{t("ml.features", lang)}</p>
+                  <div className="grid grid-cols-2 gap-1">
+                    {mlMetrics.featureImportance.slice(0, 8).map((f) => (
+                      <div key={f.name} className="flex items-center gap-1.5">
+                        <div className="flex-1 bg-[#12141c] rounded-full h-1.5">
+                          <div className="bg-blue-500/60 rounded-full h-1.5" style={{ width: `${f.importance * 100}%` }} />
+                        </div>
+                        <span className="text-[10px] text-gray-500 w-20 shrink-0">{f.name}</span>
+                        <span className="text-[10px] text-gray-400 w-8 text-right">{(f.importance * 100).toFixed(0)}%</span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+
+                {/* Test predictions (last 10) */}
+                {mlMetrics.predictions.length > 0 && (
+                  <div>
+                    <p className="text-[10px] text-gray-500 uppercase mb-1.5">{t("ml.predictions", lang)} ({mlMetrics.predictions.filter((p) => p.actual === p.predicted).length}/{mlMetrics.predictions.length})</p>
+                    <div className="flex gap-0.5 flex-wrap">
+                      {mlMetrics.predictions.slice(-30).map((p, i) => (
+                        <div key={i} className={`w-3 h-3 rounded-sm ${p.actual === p.predicted ? "bg-green-500/40" : "bg-red-500/40"}`}
+                          title={`${p.predicted} ${p.actual === p.predicted ? "✓" : "✗"} (${(p.confidence * 100).toFixed(0)}%)`} />
+                      ))}
+                    </div>
+                    <div className="flex gap-3 mt-1">
+                      <span className="text-[10px] text-gray-600 flex items-center gap-1">
+                        <div className="w-2 h-2 rounded-sm bg-green-500/40" /> {t("ml.correct", lang)}
+                      </span>
+                      <span className="text-[10px] text-gray-600 flex items-center gap-1">
+                        <div className="w-2 h-2 rounded-sm bg-red-500/40" /> {t("ml.wrong", lang)}
+                      </span>
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
+
+            {!mlMetrics && !mlTraining && (
+              <p className="text-xs text-gray-600 text-center py-2">{t("ml.not_trained", lang)}</p>
+            )}
           </div>
         )}
       </div>

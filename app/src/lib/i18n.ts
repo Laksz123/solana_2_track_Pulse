@@ -223,6 +223,33 @@ const translations = {
   "tg.setup_hint": { en: "Create bot via @BotFather, get chat ID via @userinfobot", ru: "Создай бота через @BotFather, узнай chat ID через @userinfobot" },
   "tg.last_sent": { en: "Last alert", ru: "Последний алерт" },
   "tg.alerts_sent": { en: "alerts sent", ru: "алертов отправлено" },
+
+  // ML Predictor
+  "ml.title": { en: "ML Price Predictor", ru: "ML прогноз цен" },
+  "ml.train": { en: "Train Model", ru: "Обучить модель" },
+  "ml.training": { en: "Training...", ru: "Обучение..." },
+  "ml.predict": { en: "Predict", ru: "Прогноз" },
+  "ml.not_trained": { en: "Model not trained yet", ru: "Модель ещё не обучена" },
+  "ml.train_acc": { en: "Train Acc", ru: "Train Acc" },
+  "ml.test_acc": { en: "Test Acc", ru: "Test Acc" },
+  "ml.samples": { en: "Samples", ru: "Сэмплов" },
+  "ml.epochs": { en: "Epochs", ru: "Эпох" },
+  "ml.loss": { en: "Loss", ru: "Loss" },
+  "ml.direction": { en: "Direction", ru: "Направление" },
+  "ml.confidence": { en: "Confidence", ru: "Уверенность" },
+  "ml.target": { en: "Target", ru: "Цель" },
+  "ml.features": { en: "Top Features", ru: "Топ фичи" },
+  "ml.predictions": { en: "Predictions", ru: "Прогнозы" },
+  "ml.correct": { en: "Correct", ru: "Верно" },
+  "ml.wrong": { en: "Wrong", ru: "Ошибка" },
+  "ml.up": { en: "UP", ru: "РОСТ" },
+  "ml.down": { en: "DOWN", ru: "ПАДЕНИЕ" },
+  "ml.hidden_size": { en: "Neurons", ru: "Нейроны" },
+  "ml.learning_rate": { en: "LR", ru: "LR" },
+  "ml.lookback": { en: "Lookback", ru: "Окно" },
+  "ml.config": { en: "Config", ru: "Настройки" },
+  "ml.ready": { en: "Ready", ru: "Готово" },
+  "ml.progress": { en: "Progress", ru: "Прогресс" },
 } as const;
 
 type TranslationKey = keyof typeof translations;
