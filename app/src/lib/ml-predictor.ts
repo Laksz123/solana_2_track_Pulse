@@ -28,6 +28,13 @@ export interface MLPrediction {
   confidence: number;      // 0-1
   priceTarget: number;     // estimated next price
   features: number[];      // raw feature vector used
+  ensemble?: {
+    nnVote: number;          // NN probability
+    momentumVote: number;    // momentum model vote
+    meanRevVote: number;     // mean reversion vote
+    trendVote: number;       // trend-following vote
+    finalScore: number;      // weighted ensemble score
+  };
 }
 
 export interface MLMetrics {
@@ -40,6 +47,8 @@ export interface MLMetrics {
   trainLoss: number;
   predictions: { timestamp: number; actual: "UP" | "DOWN"; predicted: "UP" | "DOWN"; confidence: number }[];
   featureImportance: { name: string; importance: number }[];
+  ensembleAccuracy?: number;
+  modelVotes?: { model: string; accuracy: number; weight: number }[];
 }
 
 export interface MLTrainProgress {
@@ -513,5 +522,187 @@ export class MLPredictor {
     pred.nn = NeuralNetwork.deserialize(data.nn);
     pred.trained = data.trained;
     return pred;
+  }
+}
+
+// ==================== ENSEMBLE MODEL ====================
+// Combines: Neural Network + Momentum + Mean Reversion + Trend Following
+// Each sub-model votes, weighted by recent accuracy
+
+function momentumScore(candles: OHLCV[], idx: number): number {
+  if (idx < 10) return 0.5;
+  const ret1 = candles[idx].close / candles[idx - 1].close - 1;
+  const ret3 = candles[idx].close / candles[idx - 3].close - 1;
+  const ret5 = candles[idx].close / candles[idx - 5].close - 1;
+  const ret10 = candles[idx].close / candles[idx - 10].close - 1;
+  // Weighted momentum: recent returns weighted more
+  const score = ret1 * 0.4 + ret3 * 0.3 + ret5 * 0.2 + ret10 * 0.1;
+  return clamp(score * 20 + 0.5, 0, 1); // normalize to 0-1
+}
+
+function meanReversionScore(candles: OHLCV[], idx: number, lookback: number): number {
+  if (idx < lookback) return 0.5;
+  const closes = candles.slice(idx - lookback, idx + 1).map((c) => c.close);
+  const mean = closes.reduce((s, v) => s + v, 0) / closes.length;
+  const cur = candles[idx].close;
+  // Distance from mean — further from mean = stronger reversion signal
+  const deviation = mean > 0 ? (cur - mean) / mean : 0;
+  // Invert: if price is above mean, predict DOWN (revert), and vice versa
+  return clamp(-deviation * 10 + 0.5, 0, 1);
+}
+
+function trendFollowingScore(candles: OHLCV[], idx: number): number {
+  if (idx < 20) return 0.5;
+  const closes = candles.slice(idx - 20, idx + 1).map((c) => c.close);
+  // Simple trend: slope of linear regression
+  const n = closes.length;
+  let sumX = 0, sumY = 0, sumXY = 0, sumX2 = 0;
+  for (let i = 0; i < n; i++) {
+    sumX += i; sumY += closes[i]; sumXY += i * closes[i]; sumX2 += i * i;
+  }
+  const slope = (n * sumXY - sumX * sumY) / (n * sumX2 - sumX * sumX);
+  const avgPrice = sumY / n;
+  const normalizedSlope = avgPrice > 0 ? slope / avgPrice : 0;
+  return clamp(normalizedSlope * 200 + 0.5, 0, 1);
+}
+
+export class EnsemblePredictor {
+  private mlPredictor: MLPredictor;
+  private modelWeights = { nn: 0.4, momentum: 0.2, meanRev: 0.2, trend: 0.2 };
+  private config: MLConfig;
+  private candles: OHLCV[] = [];
+
+  constructor(config: MLConfig = DEFAULT_ML_CONFIG) {
+    this.config = config;
+    this.mlPredictor = new MLPredictor(config);
+  }
+
+  isReady(): boolean { return this.mlPredictor.isReady(); }
+  getMetrics(): MLMetrics | null { return this.mlPredictor.getMetrics(); }
+
+  async train(
+    candles: OHLCV[],
+    onProgress?: (p: MLTrainProgress) => void,
+  ): Promise<MLMetrics> {
+    this.candles = candles;
+    const metrics = await this.mlPredictor.train(candles, onProgress);
+
+    // Evaluate each sub-model on test set
+    const splitIdx = Math.floor((candles.length - this.config.lookback - 1) * this.config.trainSplit) + this.config.lookback;
+    let nnCorrect = 0, momCorrect = 0, mrCorrect = 0, trendCorrect = 0, ensCorrect = 0;
+    let testCount = 0;
+
+    for (let i = splitIdx; i < candles.length - 1; i++) {
+      const actual = candles[i + 1].close > candles[i].close ? 1 : 0;
+      const nnProb = this.mlPredictor.predict(candles.slice(0, i + 1));
+      const nnVote = nnProb ? (nnProb.direction === "UP" ? 1 : 0) : 0.5;
+      const momVote = momentumScore(candles, i) > 0.5 ? 1 : 0;
+      const mrVote = meanReversionScore(candles, i, this.config.lookback) > 0.5 ? 1 : 0;
+      const trendVote = trendFollowingScore(candles, i) > 0.5 ? 1 : 0;
+
+      if (nnVote === actual) nnCorrect++;
+      if (momVote === actual) momCorrect++;
+      if (mrVote === actual) mrCorrect++;
+      if (trendVote === actual) trendCorrect++;
+
+      // Weighted ensemble vote
+      const ensScore = (nnVote === 1 ? this.modelWeights.nn : 0) +
+        (momVote === 1 ? this.modelWeights.momentum : 0) +
+        (mrVote === 1 ? this.modelWeights.meanRev : 0) +
+        (trendVote === 1 ? this.modelWeights.trend : 0);
+      if ((ensScore > 0.5 ? 1 : 0) === actual) ensCorrect++;
+      testCount++;
+    }
+
+    const ensAcc = testCount > 0 ? ensCorrect / testCount : 0;
+
+    // Adaptive weight update: boost models with better accuracy
+    if (testCount > 5) {
+      const accs = [
+        nnCorrect / testCount,
+        momCorrect / testCount,
+        mrCorrect / testCount,
+        trendCorrect / testCount,
+      ];
+      const totalAcc = accs.reduce((s, a) => s + a, 0);
+      if (totalAcc > 0) {
+        this.modelWeights = {
+          nn: Math.max(0.1, accs[0] / totalAcc),
+          momentum: Math.max(0.05, accs[1] / totalAcc),
+          meanRev: Math.max(0.05, accs[2] / totalAcc),
+          trend: Math.max(0.05, accs[3] / totalAcc),
+        };
+        // Renormalize
+        const wSum = this.modelWeights.nn + this.modelWeights.momentum + this.modelWeights.meanRev + this.modelWeights.trend;
+        this.modelWeights.nn /= wSum;
+        this.modelWeights.momentum /= wSum;
+        this.modelWeights.meanRev /= wSum;
+        this.modelWeights.trend /= wSum;
+      }
+    }
+
+    // Enhance metrics with ensemble info
+    metrics.ensembleAccuracy = ensAcc;
+    metrics.modelVotes = [
+      { model: "Neural Net", accuracy: testCount > 0 ? nnCorrect / testCount : 0, weight: this.modelWeights.nn },
+      { model: "Momentum", accuracy: testCount > 0 ? momCorrect / testCount : 0, weight: this.modelWeights.momentum },
+      { model: "Mean Rev", accuracy: testCount > 0 ? mrCorrect / testCount : 0, weight: this.modelWeights.meanRev },
+      { model: "Trend", accuracy: testCount > 0 ? trendCorrect / testCount : 0, weight: this.modelWeights.trend },
+    ];
+
+    return metrics;
+  }
+
+  predict(candles?: OHLCV[]): MLPrediction | null {
+    const data = candles || this.candles;
+    if (data.length < this.config.lookback + 1) return null;
+
+    const nnPred = this.mlPredictor.predict(data);
+    const idx = data.length - 1;
+
+    const nnProb = nnPred ? (nnPred.direction === "UP" ? nnPred.confidence * 0.5 + 0.5 : 0.5 - nnPred.confidence * 0.5) : 0.5;
+    const momProb = momentumScore(data, idx);
+    const mrProb = meanReversionScore(data, idx, this.config.lookback);
+    const trendProb = trendFollowingScore(data, idx);
+
+    // Weighted ensemble
+    const finalScore = nnProb * this.modelWeights.nn +
+      momProb * this.modelWeights.momentum +
+      mrProb * this.modelWeights.meanRev +
+      trendProb * this.modelWeights.trend;
+
+    const direction = finalScore > 0.5 ? "UP" as const : "DOWN" as const;
+    const confidence = Math.abs(finalScore - 0.5) * 2;
+
+    // Price target
+    const curPrice = data[idx].close;
+    const returns: number[] = [];
+    for (let i = Math.max(1, data.length - 10); i < data.length; i++) {
+      if (data[i - 1].close > 0) returns.push(Math.abs((data[i].close - data[i - 1].close) / data[i - 1].close));
+    }
+    const avgMove = returns.length > 0 ? returns.reduce((s, v) => s + v, 0) / returns.length : 0.01;
+    const priceTarget = direction === "UP" ? curPrice * (1 + avgMove * confidence) : curPrice * (1 - avgMove * confidence);
+
+    return {
+      direction,
+      confidence,
+      priceTarget,
+      features: nnPred?.features || [],
+      ensemble: {
+        nnVote: nnProb,
+        momentumVote: momProb,
+        meanRevVote: mrProb,
+        trendVote: trendProb,
+        finalScore,
+      },
+    };
+  }
+
+  // Get signal for AI integration: -1 to +1
+  getSignal(candles?: OHLCV[]): { signal: number; confidence: number; direction: "UP" | "DOWN" } {
+    const pred = this.predict(candles);
+    if (!pred) return { signal: 0, confidence: 0, direction: "UP" };
+    const signal = pred.direction === "UP" ? pred.confidence : -pred.confidence;
+    return { signal, confidence: pred.confidence, direction: pred.direction };
   }
 }

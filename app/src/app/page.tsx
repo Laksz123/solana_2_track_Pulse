@@ -72,6 +72,7 @@ import {
 } from "@/lib/telegram-bot";
 import {
   MLPredictor,
+  EnsemblePredictor,
   MLConfig,
   DEFAULT_ML_CONFIG,
   MLMetrics,
@@ -249,7 +250,7 @@ export default function Home() {
   }, [tgSettings.enabled, tgSettings.sendPnLReports, tgSettings.reportIntervalMin, tgSettings.botToken, tgSettings.chatId, agent.balanceUSD, agent.positions]);
 
   // ML Predictor
-  const mlPredictorRef = useRef(new MLPredictor(DEFAULT_ML_CONFIG));
+  const mlPredictorRef = useRef(new EnsemblePredictor(DEFAULT_ML_CONFIG));
   const [mlMetrics, setMlMetrics] = useState<MLMetrics | null>(null);
   const [mlPrediction, setMlPrediction] = useState<MLPrediction | null>(null);
   const [mlTraining, setMlTraining] = useState(false);
@@ -379,7 +380,7 @@ export default function Home() {
         return;
       }
 
-      mlPredictorRef.current = new MLPredictor(mlConfig);
+      mlPredictorRef.current = new EnsemblePredictor(mlConfig);
       const metrics = await mlPredictorRef.current.train(mlCandles, (p) => setMlProgress(p));
       setMlMetrics(metrics);
 
@@ -1852,6 +1853,57 @@ export default function Home() {
                         <p className="text-sm font-mono text-gray-200">${fmtUSD(mlPrediction.priceTarget)}</p>
                       </div>
                     </div>
+                  </div>
+                )}
+
+                {/* Ensemble model votes */}
+                {mlMetrics.modelVotes && mlMetrics.modelVotes.length > 0 && (
+                  <div>
+                    <div className="flex items-center justify-between mb-1.5">
+                      <p className="text-[10px] text-gray-500 uppercase">Ensemble Models</p>
+                      {mlMetrics.ensembleAccuracy !== undefined && (
+                        <span className={`text-[10px] font-medium ${mlMetrics.ensembleAccuracy > 0.52 ? "text-green-400" : "text-yellow-400"}`}>
+                          Ensemble: {(mlMetrics.ensembleAccuracy * 100).toFixed(0)}%
+                        </span>
+                      )}
+                    </div>
+                    <div className="grid grid-cols-4 gap-1.5">
+                      {mlMetrics.modelVotes.map((mv) => (
+                        <div key={mv.model} className="bg-[#12141c] rounded-lg p-2 text-center">
+                          <p className="text-[10px] text-gray-500 truncate">{mv.model}</p>
+                          <p className={`text-xs font-bold ${mv.accuracy > 0.52 ? "text-green-400" : mv.accuracy > 0.48 ? "text-yellow-400" : "text-red-400"}`}>
+                            {(mv.accuracy * 100).toFixed(0)}%
+                          </p>
+                          <div className="w-full bg-gray-800 rounded-full h-1 mt-1">
+                            <div className="bg-blue-500/60 rounded-full h-1" style={{ width: `${mv.weight * 100}%` }} />
+                          </div>
+                          <p className="text-[9px] text-gray-600 mt-0.5">w: {(mv.weight * 100).toFixed(0)}%</p>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {/* Ensemble vote breakdown for current prediction */}
+                {mlPrediction?.ensemble && (
+                  <div className="grid grid-cols-4 gap-1.5">
+                    {[
+                      { label: "NN", value: mlPrediction.ensemble.nnVote },
+                      { label: "Momentum", value: mlPrediction.ensemble.momentumVote },
+                      { label: "Mean Rev", value: mlPrediction.ensemble.meanRevVote },
+                      { label: "Trend", value: mlPrediction.ensemble.trendVote },
+                    ].map((v) => (
+                      <div key={v.label} className="flex items-center gap-1">
+                        <span className="text-[9px] text-gray-600 w-14 shrink-0">{v.label}</span>
+                        <div className="flex-1 bg-gray-800 rounded-full h-1.5 relative">
+                          <div className={`absolute top-0 h-1.5 rounded-full ${v.value > 0.5 ? "bg-green-500/50" : "bg-red-500/50"}`}
+                            style={{ width: `${Math.abs(v.value - 0.5) * 200}%`, left: v.value > 0.5 ? "50%" : `${v.value * 100}%` }} />
+                        </div>
+                        <span className={`text-[9px] w-6 text-right ${v.value > 0.5 ? "text-green-400" : "text-red-400"}`}>
+                          {v.value > 0.5 ? "↑" : "↓"}
+                        </span>
+                      </div>
+                    ))}
                   </div>
                 )}
 
