@@ -27,6 +27,7 @@ import {
   Settings,
 } from "lucide-react";
 import { useTelegram } from "@/components/TelegramProvider";
+import { BinanceWebSocket, getWebSocketFeed, binanceToCoinId, WSTicker } from "@/lib/websocket-feed";
 import { RealMarketAsset, OHLCV, TRACKED_COINS, fetchMarketOverview, fetchOHLC, fetchPriceHistory, buildOHLCVFromPrices } from "@/lib/market-data";
 import { AITradeDecision, Portfolio, PortfolioPosition, analyzeAllAssets } from "@/lib/ai-model";
 import { FullAnalysis, TASignal } from "@/lib/technical-analysis";
@@ -305,12 +306,50 @@ export default function Home() {
     }
   }, []);
 
+  // WebSocket real-time feed
+  const wsFeedRef = useRef<BinanceWebSocket | null>(null);
+  const [wsConnected, setWsConnected] = useState(false);
+
   useEffect(() => {
     loadMarketData();
+
+    // Start WebSocket after initial load
+    const ws = getWebSocketFeed();
+    wsFeedRef.current = ws;
+    ws.connect(TRACKED_COINS.map((c) => c.id), ["1m", "5m"]);
+
+    const unsubStatus = ws.subscribeStatus(setWsConnected);
+
+    // Real-time ticker updates → merge into assets
+    const unsubTicker = ws.subscribeTicker((ticker: WSTicker) => {
+      const coinId = binanceToCoinId(ticker.symbol);
+      if (!coinId) return;
+      setAssets((prev) => prev.map((a) => {
+        if (a.id !== coinId) return a;
+        return {
+          ...a,
+          currentPrice: ticker.price,
+          priceChange24h: ticker.priceChange,
+          priceChangePercent24h: ticker.priceChangePct,
+          high24h: ticker.high24h,
+          low24h: ticker.low24h,
+          totalVolume: ticker.quoteVolume,
+          lastUpdated: ticker.timestamp,
+        };
+      }));
+    });
+
+    // Fallback: CoinGecko polling every 60s (slower since WS handles real-time)
     const iv = setInterval(() => {
       fetchMarketOverview().then((o) => { if (o.length > 0) setAssets(o); });
-    }, 30000); // refresh prices every 30s
-    return () => clearInterval(iv);
+    }, 60000);
+
+    return () => {
+      clearInterval(iv);
+      unsubStatus();
+      unsubTicker();
+      ws.disconnect();
+    };
   }, [loadMarketData]);
 
   // No auto-scroll — prevents page from jumping down on every log update

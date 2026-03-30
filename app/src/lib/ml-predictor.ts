@@ -16,10 +16,10 @@ export interface MLConfig {
 }
 
 export const DEFAULT_ML_CONFIG: MLConfig = {
-  hiddenSize: 32,
-  learningRate: 0.01,
-  epochs: 100,
-  lookback: 14,
+  hiddenSize: 64,
+  learningRate: 0.005,
+  epochs: 150,
+  lookback: 20,
   trainSplit: 0.8,
 };
 
@@ -67,134 +67,208 @@ const FEATURE_NAMES = [
   "Return_1", "Return_3", "Return_5", "Return_10",
   "Volatility_5", "Volume_change", "High_Low_range",
   "Close_Open_ratio",
+  // V2 features
+  "VWAP_ratio", "OBV_trend", "RSI_divergence", "Vol_weighted_mom",
+  "Body_ratio", "Upper_shadow", "Lower_shadow", "Price_accel",
 ];
 
-// ==================== NEURAL NETWORK ====================
+// ==================== DEEP NEURAL NETWORK ====================
+// 2 hidden layers + dropout + GRU memory cell + L2 regularization
 
-class NeuralNetwork {
-  private weightsIH: number[][];  // input → hidden
-  private biasH: number[];
-  private weightsHO: number[];    // hidden → output
-  private biasO: number;
+class DeepNeuralNetwork {
+  private w1: number[][];  // input → hidden1
+  private b1: number[];
+  private w2: number[][];  // hidden1 → hidden2
+  private b2: number[];
+  private w3: number[];    // hidden2 → output
+  private b3: number;
+  // GRU-like memory gate
+  private wz: number[][];  // update gate weights
+  private bz: number[];
+  private wr: number[][];  // reset gate weights
+  private br: number[];
+  private memory: number[];
   private inputSize: number;
-  private hiddenSize: number;
+  private h1Size: number;
+  private h2Size: number;
+  private dropoutRate: number;
+  private training: boolean = true;
 
-  constructor(inputSize: number, hiddenSize: number) {
+  constructor(inputSize: number, hiddenSize: number, dropoutRate: number = 0.2) {
     this.inputSize = inputSize;
-    this.hiddenSize = hiddenSize;
+    this.h1Size = hiddenSize;
+    this.h2Size = Math.floor(hiddenSize / 2);
+    this.dropoutRate = dropoutRate;
 
-    // Xavier initialization
-    const scaleIH = Math.sqrt(2 / (inputSize + hiddenSize));
-    const scaleHO = Math.sqrt(2 / (hiddenSize + 1));
+    // Xavier/He initialization
+    const s1 = Math.sqrt(2 / (inputSize + this.h1Size));
+    const s2 = Math.sqrt(2 / (this.h1Size + this.h2Size));
+    const s3 = Math.sqrt(2 / (this.h2Size + 1));
 
-    this.weightsIH = Array.from({ length: hiddenSize }, () =>
-      Array.from({ length: inputSize }, () => (Math.random() * 2 - 1) * scaleIH)
+    this.w1 = Array.from({ length: this.h1Size }, () =>
+      Array.from({ length: inputSize }, () => (Math.random() * 2 - 1) * s1)
     );
-    this.biasH = new Array(hiddenSize).fill(0);
-    this.weightsHO = Array.from({ length: hiddenSize }, () => (Math.random() * 2 - 1) * scaleHO);
-    this.biasO = 0;
+    this.b1 = new Array(this.h1Size).fill(0);
+
+    this.w2 = Array.from({ length: this.h2Size }, () =>
+      Array.from({ length: this.h1Size }, () => (Math.random() * 2 - 1) * s2)
+    );
+    this.b2 = new Array(this.h2Size).fill(0);
+
+    this.w3 = Array.from({ length: this.h2Size }, () => (Math.random() * 2 - 1) * s3);
+    this.b3 = 0;
+
+    // GRU gates (operates on hidden1 size)
+    const sg = Math.sqrt(2 / (this.h1Size * 2));
+    this.wz = Array.from({ length: this.h1Size }, () =>
+      Array.from({ length: this.h1Size }, () => (Math.random() * 2 - 1) * sg)
+    );
+    this.bz = new Array(this.h1Size).fill(0);
+    this.wr = Array.from({ length: this.h1Size }, () =>
+      Array.from({ length: this.h1Size }, () => (Math.random() * 2 - 1) * sg)
+    );
+    this.br = new Array(this.h1Size).fill(0);
+    this.memory = new Array(this.h1Size).fill(0);
   }
 
-  // ReLU activation
-  private relu(x: number): number { return Math.max(0, x); }
-  private reluDeriv(x: number): number { return x > 0 ? 1 : 0; }
-
-  // Sigmoid for output
+  private leakyRelu(x: number): number { return x > 0 ? x : 0.01 * x; }
+  private leakyReluDeriv(x: number): number { return x > 0 ? 1 : 0.01; }
   private sigmoid(x: number): number {
-    const clamped = Math.max(-500, Math.min(500, x));
-    return 1 / (1 + Math.exp(-clamped));
+    const c = Math.max(-500, Math.min(500, x));
+    return 1 / (1 + Math.exp(-c));
   }
 
-  // Forward pass
-  forward(input: number[]): { hidden: number[]; output: number } {
-    const hidden = new Array(this.hiddenSize);
-    for (let j = 0; j < this.hiddenSize; j++) {
-      let sum = this.biasH[j];
-      for (let i = 0; i < this.inputSize; i++) {
-        sum += input[i] * this.weightsIH[j][i];
+  // Dropout mask
+  private dropMask(size: number): number[] {
+    if (!this.training || this.dropoutRate <= 0) return new Array(size).fill(1);
+    const scale = 1 / (1 - this.dropoutRate);
+    return Array.from({ length: size }, () => Math.random() > this.dropoutRate ? scale : 0);
+  }
+
+  setTraining(t: boolean): void { this.training = t; }
+  resetMemory(): void { this.memory = new Array(this.h1Size).fill(0); }
+
+  // Forward pass: input → h1 (+ GRU memory) → h2 (+ dropout) → output
+  forward(input: number[]): { h1: number[]; h1gated: number[]; h2: number[]; output: number; drop1: number[]; drop2: number[] } {
+    // Layer 1
+    const h1raw = new Array(this.h1Size);
+    for (let j = 0; j < this.h1Size; j++) {
+      let sum = this.b1[j];
+      for (let i = 0; i < this.inputSize; i++) sum += input[i] * this.w1[j][i];
+      h1raw[j] = this.leakyRelu(sum);
+    }
+
+    // GRU gate: blend h1 with memory
+    const h1gated = new Array(this.h1Size);
+    for (let j = 0; j < this.h1Size; j++) {
+      let zSum = this.bz[j], rSum = this.br[j];
+      for (let k = 0; k < this.h1Size; k++) {
+        zSum += this.wz[j][k] * this.memory[k];
+        rSum += this.wr[j][k] * this.memory[k];
       }
-      hidden[j] = this.relu(sum);
+      const z = this.sigmoid(zSum); // update gate
+      const r = this.sigmoid(rSum); // reset gate
+      h1gated[j] = z * this.memory[j] * r + (1 - z) * h1raw[j];
+    }
+    // Update memory
+    for (let j = 0; j < this.h1Size; j++) this.memory[j] = h1gated[j];
+
+    const drop1 = this.dropMask(this.h1Size);
+    const h1dropped = h1gated.map((v, i) => v * drop1[i]);
+
+    // Layer 2
+    const h2 = new Array(this.h2Size);
+    for (let j = 0; j < this.h2Size; j++) {
+      let sum = this.b2[j];
+      for (let i = 0; i < this.h1Size; i++) sum += h1dropped[i] * this.w2[j][i];
+      h2[j] = this.leakyRelu(sum);
     }
 
-    let outSum = this.biasO;
-    for (let j = 0; j < this.hiddenSize; j++) {
-      outSum += hidden[j] * this.weightsHO[j];
-    }
+    const drop2 = this.dropMask(this.h2Size);
+    const h2dropped = h2.map((v, i) => v * drop2[i]);
 
-    return { hidden, output: this.sigmoid(outSum) };
+    // Output
+    let outSum = this.b3;
+    for (let j = 0; j < this.h2Size; j++) outSum += h2dropped[j] * this.w3[j];
+
+    return { h1: h1raw, h1gated: h1dropped, h2: h2dropped, output: this.sigmoid(outSum), drop1, drop2 };
   }
 
-  // Train one sample (SGD with backprop)
-  train(input: number[], target: number, lr: number): number {
-    // Forward
-    const { hidden, output } = this.forward(input);
+  // Train one sample (SGD with backprop + L2)
+  train(input: number[], target: number, lr: number, l2: number = 0.0001): number {
+    this.setTraining(true);
+    const { h1gated, h2, output, drop1, drop2 } = this.forward(input);
 
-    // Binary cross-entropy loss
     const eps = 1e-7;
     const loss = -(target * Math.log(output + eps) + (1 - target) * Math.log(1 - output + eps));
+    const dOut = output - target;
 
-    // Output gradient (sigmoid + BCE derivative)
-    const dOutput = output - target;
-
-    // Hidden → Output gradients
-    for (let j = 0; j < this.hiddenSize; j++) {
-      const dW = dOutput * hidden[j];
-      this.weightsHO[j] -= lr * dW;
+    // Layer 2 → Output
+    const dH2 = new Array(this.h2Size).fill(0);
+    for (let j = 0; j < this.h2Size; j++) {
+      this.w3[j] -= lr * (dOut * h2[j] + l2 * this.w3[j]);
+      dH2[j] = dOut * this.w3[j] * this.leakyReluDeriv(h2[j]) * drop2[j];
     }
-    this.biasO -= lr * dOutput;
+    this.b3 -= lr * dOut;
 
-    // Input → Hidden gradients
-    for (let j = 0; j < this.hiddenSize; j++) {
-      const dHidden = dOutput * this.weightsHO[j] * this.reluDeriv(hidden[j]);
-      for (let i = 0; i < this.inputSize; i++) {
-        this.weightsIH[j][i] -= lr * dHidden * input[i];
+    // Layer 1 → Layer 2
+    const dH1 = new Array(this.h1Size).fill(0);
+    for (let j = 0; j < this.h2Size; j++) {
+      for (let i = 0; i < this.h1Size; i++) {
+        this.w2[j][i] -= lr * (dH2[j] * h1gated[i] + l2 * this.w2[j][i]);
+        dH1[i] += dH2[j] * this.w2[j][i];
       }
-      this.biasH[j] -= lr * dHidden;
+      this.b2[j] -= lr * dH2[j];
+    }
+
+    // Input → Layer 1
+    for (let j = 0; j < this.h1Size; j++) {
+      const grad = dH1[j] * this.leakyReluDeriv(h1gated[j]) * drop1[j];
+      for (let i = 0; i < this.inputSize; i++) {
+        this.w1[j][i] -= lr * (grad * input[i] + l2 * this.w1[j][i]);
+      }
+      this.b1[j] -= lr * grad;
     }
 
     return loss;
   }
 
-  // Predict
   predict(input: number[]): number {
+    this.setTraining(false);
     return this.forward(input).output;
   }
 
-  // Feature importance (absolute weight sums from input layer)
   getFeatureImportance(): number[] {
-    const importance = new Array(this.inputSize).fill(0);
+    const imp = new Array(this.inputSize).fill(0);
     for (let i = 0; i < this.inputSize; i++) {
-      for (let j = 0; j < this.hiddenSize; j++) {
-        importance[i] += Math.abs(this.weightsIH[j][i]);
-      }
+      for (let j = 0; j < this.h1Size; j++) imp[i] += Math.abs(this.w1[j][i]);
     }
-    // Normalize to 0-1
-    const max = Math.max(...importance, 1e-7);
-    return importance.map((v) => v / max);
+    const max = Math.max(...imp, 1e-7);
+    return imp.map((v) => v / max);
   }
 
-  // Serialize
   serialize(): object {
     return {
-      inputSize: this.inputSize,
-      hiddenSize: this.hiddenSize,
-      weightsIH: this.weightsIH,
-      biasH: this.biasH,
-      weightsHO: this.weightsHO,
-      biasO: this.biasO,
+      inputSize: this.inputSize, h1Size: this.h1Size, h2Size: this.h2Size,
+      w1: this.w1, b1: this.b1, w2: this.w2, b2: this.b2, w3: this.w3, b3: this.b3,
+      wz: this.wz, bz: this.bz, wr: this.wr, br: this.br, memory: this.memory,
+      dropoutRate: this.dropoutRate,
     };
   }
 
-  // Deserialize
-  static deserialize(data: any): NeuralNetwork {
-    const nn = new NeuralNetwork(data.inputSize, data.hiddenSize);
-    nn.weightsIH = data.weightsIH;
-    nn.biasH = data.biasH;
-    nn.weightsHO = data.weightsHO;
-    nn.biasO = data.biasO;
+  static deserialize(data: any): DeepNeuralNetwork {
+    const nn = new DeepNeuralNetwork(data.inputSize, data.h1Size, data.dropoutRate || 0.2);
+    nn.w1 = data.w1; nn.b1 = data.b1; nn.w2 = data.w2; nn.b2 = data.b2;
+    nn.w3 = data.w3; nn.b3 = data.b3;
+    nn.wz = data.wz; nn.bz = data.bz; nn.wr = data.wr; nn.br = data.br;
+    nn.memory = data.memory || new Array(data.h1Size).fill(0);
     return nn;
   }
 }
+
+// Backward compat alias
+type NeuralNetwork = DeepNeuralNetwork;
+const NeuralNetwork = DeepNeuralNetwork;
 
 // ==================== FEATURE EXTRACTION ====================
 
@@ -317,6 +391,69 @@ function extractFeatures(candles: OHLCV[], idx: number, lookback: number): numbe
   // 16. Close-Open ratio
   const coRatio = cur.open > 0 ? cur.close / cur.open : 1;
 
+  // ==================== V2 FEATURES ====================
+
+  // 17. VWAP ratio — volume-weighted average price position
+  let vwapNum = 0, vwapDen = 0;
+  for (const c of window) {
+    const tp = (c.high + c.low + c.close) / 3;
+    vwapNum += tp * c.volume;
+    vwapDen += c.volume;
+  }
+  const vwap = vwapDen > 0 ? vwapNum / vwapDen : cur.close;
+  const vwapRatio = vwap > 0 ? cur.close / vwap : 1;
+
+  // 18. OBV trend — on-balance volume direction
+  let obv = 0;
+  for (let i = 1; i < window.length; i++) {
+    if (window[i].close > window[i - 1].close) obv += window[i].volume;
+    else if (window[i].close < window[i - 1].close) obv -= window[i].volume;
+  }
+  const obvMax = window.reduce((s, c) => s + c.volume, 0);
+  const obvNorm = obvMax > 0 ? obv / obvMax : 0;
+
+  // 19. RSI divergence — price vs RSI direction mismatch
+  const priceDir = cur.close > candles[Math.max(0, idx - 5)].close ? 1 : -1;
+  // Compute RSI at idx-5 for divergence check
+  let rsi5Gains = 0, rsi5Losses = 0;
+  const w5start = Math.max(0, idx - 5 - lookback);
+  const w5 = candles.slice(w5start, Math.max(1, idx - 5) + 1).map((c) => c.close);
+  for (let i = 1; i < w5.length; i++) {
+    const d = w5[i] - w5[i - 1];
+    if (d > 0) rsi5Gains += d; else rsi5Losses -= d;
+  }
+  const rsi5 = rsi5Losses === 0 ? 100 : 100 - 100 / (1 + (rsi5Gains / Math.max(1, w5.length - 1)) / (rsi5Losses / Math.max(1, w5.length - 1)));
+  const rsiDir = rsi > rsi5 ? 1 : -1;
+  const rsiDivergence = priceDir !== rsiDir ? 1 : 0; // divergence detected
+
+  // 20. Volume-weighted momentum
+  let volMom = 0, volTotal = 0;
+  for (let i = Math.max(1, window.length - 5); i < window.length; i++) {
+    const ret = window[i - 1].close > 0 ? (window[i].close - window[i - 1].close) / window[i - 1].close : 0;
+    volMom += ret * window[i].volume;
+    volTotal += window[i].volume;
+  }
+  const volWeightedMom = volTotal > 0 ? volMom / volTotal : 0;
+
+  // 21. Candle body ratio (body size / total range)
+  const bodySize = Math.abs(cur.close - cur.open);
+  const totalRange = cur.high - cur.low;
+  const bodyRatio = totalRange > 0 ? bodySize / totalRange : 0.5;
+
+  // 22. Upper shadow ratio
+  const upperShadow = cur.high - Math.max(cur.close, cur.open);
+  const upperShadowRatio = totalRange > 0 ? upperShadow / totalRange : 0;
+
+  // 23. Lower shadow ratio
+  const lowerShadow = Math.min(cur.close, cur.open) - cur.low;
+  const lowerShadowRatio = totalRange > 0 ? lowerShadow / totalRange : 0;
+
+  // 24. Price acceleration (2nd derivative of returns)
+  const accelRet1 = ret1;
+  const accelRet2 = idx >= 2 && candles[idx - 2].close > 0
+    ? (candles[idx - 1].close - candles[idx - 2].close) / candles[idx - 2].close * 100 : 0;
+  const priceAccel = accelRet1 - accelRet2;
+
   return [
     rsi / 100,                          // [0,1]
     clamp((macdHist / cur.close) * 50 + 0.5, 0, 1), // normalized around 0.5
@@ -334,6 +471,15 @@ function extractFeatures(candles: OHLCV[], idx: number, lookback: number): numbe
     clamp(volChange / 3, 0, 1),         // normalize
     clamp(hlRange / 10, 0, 1),
     clamp((coRatio - 0.95) * 10, 0, 1),
+    // V2 features
+    clamp((vwapRatio - 0.95) * 10, 0, 1),       // VWAP position
+    clamp(obvNorm + 0.5, 0, 1),                  // OBV trend [-1,1] → [0,1]
+    rsiDivergence,                                // 0 or 1
+    clamp(volWeightedMom * 100 + 0.5, 0, 1),    // volume-weighted momentum
+    clamp(bodyRatio, 0, 1),                       // body ratio
+    clamp(upperShadowRatio, 0, 1),               // upper shadow
+    clamp(lowerShadowRatio, 0, 1),               // lower shadow
+    clamp(priceAccel / 10 + 0.5, 0, 1),         // price acceleration
   ];
 }
 
