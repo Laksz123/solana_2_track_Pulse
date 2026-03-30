@@ -95,3 +95,36 @@ body {
 ::-webkit-scrollbar-track { background: #0f1117; }
 ::-webkit-scrollbar-thumb { background: #2a2d3a; border-radius: 3px; }
 ::-webkit-scrollbar-thumb:hover { background: #3a3d4a; }
+
+/* ==================== TELEGRAM MINI APP ==================== */
+
+/* Safe area padding for Telegram */
+.tg-safe-top { padding-top: env(safe-area-inset-top, 0px); }
+.tg-safe-bottom { padding-bottom: env(safe-area-inset-bottom, 0px); }
+
+/* Telegram viewport — fill entire mini app */
+.tg-viewport {
+  min-height: 100vh;
+  min-height: 100dvh;
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+}
+
+/* Hide scrollbar in Telegram for cleaner look */
+.tg-app ::-webkit-scrollbar { width: 0; }
+
+/* Telegram-specific overrides */
+.tg-app body {
+  overscroll-behavior-y: contain;
+  -webkit-tap-highlight-color: transparent;
+  user-select: none;
+}
+
+/* Mobile compact cards */
+@media (max-width: 480px) {
+  .card { border-radius: 8px; }
+  .btn-primary, .btn-secondary, .btn-danger { border-radius: 6px; }
+}
+
+/* Telegram bottom padding for MainButton area */
+.tg-bottom-pad { padding-bottom: 80px; }

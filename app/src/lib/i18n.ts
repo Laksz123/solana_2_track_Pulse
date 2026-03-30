@@ -258,6 +258,10 @@ const translations = {
   "ml.trend": { en: "Trend", ru: "Тренд" },
   "ml.weight": { en: "Weight", ru: "Вес" },
   "ml.integrated": { en: "ML integrated into AI decisions", ru: "ML интегрирован в AI решения" },
+  "tg.connect_wallet": { en: "Connect Wallet", ru: "Подключить кошелёк" },
+  "tg.open_browser": { en: "Open in Browser", ru: "Открыть в браузере" },
+  "tg.welcome": { en: "Welcome", ru: "Добро пожаловать" },
+  "tg.mini_app": { en: "Telegram Mini App", ru: "Telegram Мини-приложение" },
 } as const;
 
 type TranslationKey = keyof typeof translations;

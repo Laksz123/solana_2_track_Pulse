@@ -82,12 +82,42 @@ function handleStart(chatId: string | number, control: BotControl): void {
 /positions — Открытые позиции
 /pnl — P&L отчёт
 /trades — Последние сделки
+/app — Открыть приложение
 /help — Помощь
 
 <b>Текущий режим:</b> ${STRATEGY_NAMES[control.strategy]}
 <b>Торговля:</b> ${control.tradingEnabled ? "✅ Активна" : "⏸ Остановлена"}`;
 
-  sendMessage(chatId, msg);
+  // Add Web App button if URL is configured
+  const keyboard: any = { inline_keyboard: [] };
+  if (CONFIG.webAppUrl) {
+    keyboard.inline_keyboard.push([
+      { text: "📱 Открыть приложение", web_app: { url: CONFIG.webAppUrl } },
+    ]);
+  }
+  keyboard.inline_keyboard.push([
+    { text: "📊 Статус", callback_data: "cmd_status" },
+    { text: "⚡ Торговля", callback_data: "cmd_trade" },
+    { text: "🎯 Режим", callback_data: "cmd_mode" },
+  ]);
+
+  sendMessage(chatId, msg, keyboard);
+}
+
+function handleApp(chatId: string | number): void {
+  if (!CONFIG.webAppUrl) {
+    sendMessage(chatId, `⚠️ <b>Web App URL не настроен</b>\n\nДобавьте WEB_APP_URL в .env файл бота.\nПример: WEB_APP_URL=https://your-app.vercel.app`);
+    return;
+  }
+
+  const keyboard = {
+    inline_keyboard: [
+      [{ text: "📱 Открыть AI Asset Manager", web_app: { url: CONFIG.webAppUrl } }],
+      [{ text: "🌐 Открыть в браузере", url: CONFIG.webAppUrl }],
+    ],
+  };
+
+  sendMessage(chatId, `📱 <b>AI Asset Manager</b>\n\nОткройте приложение для полного управления:\n• Портфель и балансы\n• Торговые графики\n• ML анализ\n• Подключение кошелька\n• Бэктестинг`, keyboard);
 }
 
 function handleStatus(chatId: string | number, control: BotControl): void {
@@ -356,6 +386,7 @@ export class TelegramCommandBot {
     await tgRequest("setMyCommands", {
       commands: [
         { command: "start", description: "🤖 Запуск бота" },
+        { command: "app", description: "📱 Открыть приложение" },
         { command: "status", description: "📊 Статус бота" },
         { command: "trade", description: "⚡ Вкл/Выкл торговлю" },
         { command: "mode", description: "🎯 Выбрать режим" },
@@ -366,6 +397,18 @@ export class TelegramCommandBot {
         { command: "help", description: "📖 Справка" },
       ],
     });
+
+    // Set menu button to Web App if URL configured
+    if (CONFIG.webAppUrl) {
+      await tgRequest("setChatMenuButton", {
+        menu_button: {
+          type: "web_app",
+          text: "📱 App",
+          web_app: { url: CONFIG.webAppUrl },
+        },
+      });
+      log.info(`Telegram Menu Button set to: ${CONFIG.webAppUrl}`);
+    }
 
     // Polling loop
     while (this.running) {
@@ -400,7 +443,16 @@ export class TelegramCommandBot {
         const cb = update.callback_query;
         const chatId = cb.message?.chat?.id;
         if (chatId && this.isAuthorized(chatId)) {
-          handleCallback(cb.id, chatId, cb.data, this.control);
+          // Handle quick command callbacks from /start buttons
+          if (cb.data === "cmd_status") {
+            answerCallback(cb.id); handleStatus(chatId, this.control);
+          } else if (cb.data === "cmd_trade") {
+            answerCallback(cb.id); handleTrade(chatId, this.control);
+          } else if (cb.data === "cmd_mode") {
+            answerCallback(cb.id); handleMode(chatId, this.control);
+          } else {
+            handleCallback(cb.id, chatId, cb.data, this.control);
+          }
         }
         continue;
       }
@@ -430,6 +482,7 @@ export class TelegramCommandBot {
         case "/positions": handlePositions(chatId, this.control); break;
         case "/pnl": handlePnL(chatId, this.control); break;
         case "/trades": handleTrades(chatId, this.control); break;
+        case "/app": handleApp(chatId); break;
         case "/help": handleHelp(chatId); break;
         default:
           if (text.startsWith("/")) {

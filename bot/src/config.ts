@@ -50,6 +50,9 @@ export const CONFIG = {
   // State
   stateFile: envStr("STATE_FILE", "./bot-state.json"),
 
+  // Telegram Mini App
+  webAppUrl: envStr("WEB_APP_URL", ""),
+
   // Logging
   logLevel: envStr("LOG_LEVEL", "info") as "debug" | "info" | "warn" | "error",
 };

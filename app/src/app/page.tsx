@@ -26,6 +26,7 @@ import {
   Loader2,
   Settings,
 } from "lucide-react";
+import { useTelegram } from "@/components/TelegramProvider";
 import { RealMarketAsset, OHLCV, TRACKED_COINS, fetchMarketOverview, fetchOHLC, fetchPriceHistory, buildOHLCVFromPrices } from "@/lib/market-data";
 import { AITradeDecision, Portfolio, PortfolioPosition, analyzeAllAssets } from "@/lib/ai-model";
 import { FullAnalysis, TASignal } from "@/lib/technical-analysis";
@@ -120,7 +121,14 @@ function LangToggle({ lang, setLang }: { lang: Lang; setLang: (l: Lang) => void 
 // ==================== MAIN ====================
 
 export default function Home() {
+  const { isTelegram, user: tgUser, haptic, platform: tgPlatform, viewportHeight } = useTelegram();
+
+  // Auto-detect language from Telegram user or default to 'ru'
   const [lang, setLang] = useState<Lang>("ru");
+  useEffect(() => {
+    if (tgUser?.language_code === "en") setLang("en");
+  }, [tgUser]);
+
   const [agent, setAgent] = useState<AgentState>({
     exists: false, balanceUSD: 0, strategy: 1, positions: [], history: [],
   });
@@ -767,7 +775,33 @@ export default function Home() {
   // ==================== DASHBOARD ====================
 
   return (
-    <div className="min-h-screen p-3 md:p-5 max-w-[1400px] mx-auto relative">
+    <div className={`min-h-screen p-3 md:p-5 max-w-[1400px] mx-auto relative ${isTelegram ? "tg-viewport tg-app tg-safe-top tg-bottom-pad" : ""}`}>
+      {/* Telegram Mini App Header */}
+      {isTelegram && tgUser && (
+        <div className="flex items-center justify-between mb-3 px-1">
+          <div className="flex items-center gap-2">
+            <div className="w-8 h-8 rounded-full bg-gradient-to-br from-blue-500 to-purple-600 flex items-center justify-center text-white text-xs font-bold">
+              {tgUser.first_name?.[0] || "U"}
+            </div>
+            <div>
+              <p className="text-xs font-medium text-gray-200">{tgUser.first_name} {tgUser.last_name || ""}</p>
+              <p className="text-[10px] text-gray-500">@{tgUser.username || "user"} • {tgPlatform}</p>
+            </div>
+          </div>
+          <div className="flex items-center gap-2">
+            <LangToggle lang={lang} setLang={setLang} />
+            {connected ? (
+              <span className="tag bg-green-500/10 text-green-400 text-[10px]">🔗 {publicKey?.toBase58().slice(0, 4)}...{publicKey?.toBase58().slice(-4)}</span>
+            ) : (
+              <button onClick={() => { haptic?.impactOccurred("medium"); setWalletModalVisible(true); }}
+                className="btn-primary px-3 py-1.5 text-[10px] flex items-center gap-1">
+                <Wallet className="w-3 h-3" /> {t("tg.connect_wallet", lang)}
+              </button>
+            )}
+          </div>
+        </div>
+      )}
+
       {/* Toast notifications */}
       {toasts.length > 0 && (
         <div className="fixed top-4 right-4 z-50 flex flex-col gap-2 max-w-sm">
