@@ -61,6 +61,7 @@ import {
   fetchBacktestData,
   runBacktest,
 } from "@/lib/backtest";
+import { PnLTracker, PnLMetrics } from "@/lib/pnl-tracker";
 
 // ==================== CONSTANTS ====================
 
@@ -183,6 +184,18 @@ export default function Home() {
   const [backtestProgress, setBacktestProgress] = useState(0);
   const [backtestConfig, setBacktestConfig] = useState<BacktestConfig>(DEFAULT_BACKTEST_CONFIG);
   const [showBacktest, setShowBacktest] = useState(false);
+
+  // P&L Tracker
+  const pnlTrackerRef = useRef(new PnLTracker(INITIAL_WALLET_USD));
+  const [pnlMetrics, setPnlMetrics] = useState<PnLMetrics | null>(null);
+
+  // Update P&L metrics periodically when agent has trades
+  useEffect(() => {
+    if (!agent.exists || agent.history.length === 0) return;
+    const tracker = pnlTrackerRef.current;
+    tracker.snapshotEquity(agent.balanceUSD, agent.positions);
+    setPnlMetrics(tracker.getMetrics(agent.balanceUSD, agent.positions));
+  }, [agent.exists, agent.balanceUSD, agent.positions, agent.history.length]);
 
   // ==================== TOGGLE LOG ====================
 
@@ -466,6 +479,7 @@ export default function Home() {
         return { ...p, balanceUSD: p.balanceUSD - actualSpend, positions: pos, history: [...p.history, hEntry] };
       });
       if (!swapResult) addToast(`BUY ${topDecision.symbol}: $${fmtUSD(buyAmount)} @ $${fmtUSD(topDecision.currentPrice)}`, "success");
+      pnlTrackerRef.current.recordTrade("BUY", topDecision.symbol, topDecision.coinId, buyAmount, topDecision.currentPrice);
     } else if (topDecision.action === "SELL" && topDecision.amountUSD > 0) {
       const units = topDecision.amountUSD / topDecision.currentPrice;
       setAgent((p) => {
@@ -475,6 +489,7 @@ export default function Home() {
         return { ...p, balanceUSD: p.balanceUSD + topDecision.amountUSD, positions: pos, history: [...p.history, hEntry] };
       });
       if (!swapResult) addToast(`SELL ${topDecision.symbol}: $${fmtUSD(topDecision.amountUSD)} @ $${fmtUSD(topDecision.currentPrice)}`, "success");
+      pnlTrackerRef.current.recordTrade("SELL", topDecision.symbol, topDecision.coinId, topDecision.amountUSD, topDecision.currentPrice);
     } else {
       setAgent((p) => ({ ...p, history: [...p.history, hEntry] }));
     }
@@ -1235,6 +1250,119 @@ export default function Home() {
           </div>
         </div>
       </div>
+
+      {/* P&L PERFORMANCE PANEL */}
+      {pnlMetrics && agent.history.length > 0 && (
+        <div className="card p-4 mt-3">
+          <div className="flex items-center justify-between mb-3">
+            <div className="flex items-center gap-2">
+              <p className="text-xs text-gray-500 uppercase tracking-wide font-semibold">{t("pnl.title", lang)}</p>
+              <span className={`tag text-[10px] ${pnlMetrics.totalPnLUSD >= 0 ? "bg-green-500/10 text-green-400" : "bg-red-500/10 text-red-400"}`}>
+                {pnlMetrics.totalPnLUSD >= 0 ? "+" : ""}{pnlMetrics.totalPnLPct.toFixed(2)}%
+              </span>
+            </div>
+            <span className="text-[10px] text-gray-600">{pnlMetrics.totalTrades} {t("pnl.trades", lang).toLowerCase()}</span>
+          </div>
+
+          <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-8 gap-2">
+            {/* Total P&L */}
+            <div className="bg-[#12141c] rounded-lg p-2 text-center">
+              <p className="text-[9px] text-gray-600 uppercase">{t("pnl.total", lang)}</p>
+              <p className={`text-sm font-bold font-mono ${pnlMetrics.totalPnLUSD >= 0 ? "text-green-400" : "text-red-400"}`}>
+                {pnlMetrics.totalPnLUSD >= 0 ? "+" : ""}${fmtUSD(Math.abs(pnlMetrics.totalPnLUSD))}
+              </p>
+            </div>
+            {/* Realized */}
+            <div className="bg-[#12141c] rounded-lg p-2 text-center">
+              <p className="text-[9px] text-gray-600 uppercase">{t("pnl.realized", lang)}</p>
+              <p className={`text-sm font-bold font-mono ${pnlMetrics.realizedPnLUSD >= 0 ? "text-green-400" : "text-red-400"}`}>
+                {pnlMetrics.realizedPnLUSD >= 0 ? "+" : ""}${fmtUSD(Math.abs(pnlMetrics.realizedPnLUSD))}
+              </p>
+            </div>
+            {/* Unrealized */}
+            <div className="bg-[#12141c] rounded-lg p-2 text-center">
+              <p className="text-[9px] text-gray-600 uppercase">{t("pnl.unrealized", lang)}</p>
+              <p className={`text-sm font-bold font-mono ${pnlMetrics.unrealizedPnLUSD >= 0 ? "text-green-400" : "text-red-400"}`}>
+                {pnlMetrics.unrealizedPnLUSD >= 0 ? "+" : ""}${fmtUSD(Math.abs(pnlMetrics.unrealizedPnLUSD))}
+              </p>
+            </div>
+            {/* Win Rate */}
+            <div className="bg-[#12141c] rounded-lg p-2 text-center">
+              <p className="text-[9px] text-gray-600 uppercase">{t("pnl.win_rate", lang)}</p>
+              <p className={`text-sm font-bold font-mono ${pnlMetrics.winRate >= 50 ? "text-green-400" : pnlMetrics.totalTrades === 0 ? "text-gray-500" : "text-red-400"}`}>
+                {pnlMetrics.totalTrades > 0 ? `${pnlMetrics.winRate.toFixed(0)}%` : "—"}
+              </p>
+              {pnlMetrics.totalTrades > 0 && (
+                <p className="text-[9px] text-gray-600">{pnlMetrics.winningTrades}{t("pnl.wins", lang)}/{pnlMetrics.losingTrades}{t("pnl.losses", lang)}</p>
+              )}
+            </div>
+            {/* Profit Factor */}
+            <div className="bg-[#12141c] rounded-lg p-2 text-center">
+              <p className="text-[9px] text-gray-600 uppercase">{t("pnl.profit_factor", lang)}</p>
+              <p className={`text-sm font-bold font-mono ${pnlMetrics.profitFactor >= 1.5 ? "text-green-400" : pnlMetrics.profitFactor >= 1 ? "text-yellow-400" : pnlMetrics.totalTrades === 0 ? "text-gray-500" : "text-red-400"}`}>
+                {pnlMetrics.totalTrades > 0 ? (pnlMetrics.profitFactor === Infinity ? "∞" : pnlMetrics.profitFactor.toFixed(2)) : "—"}
+              </p>
+            </div>
+            {/* Max Drawdown */}
+            <div className="bg-[#12141c] rounded-lg p-2 text-center">
+              <p className="text-[9px] text-gray-600 uppercase">{t("pnl.max_dd", lang)}</p>
+              <p className="text-sm font-bold font-mono text-red-400">
+                {pnlMetrics.maxDrawdown > 0 ? `-${pnlMetrics.maxDrawdown.toFixed(1)}%` : "0%"}
+              </p>
+            </div>
+            {/* Sharpe */}
+            <div className="bg-[#12141c] rounded-lg p-2 text-center">
+              <p className="text-[9px] text-gray-600 uppercase">{t("pnl.sharpe", lang)}</p>
+              <p className={`text-sm font-bold font-mono ${pnlMetrics.sharpeRatio >= 1 ? "text-green-400" : pnlMetrics.sharpeRatio >= 0 ? "text-yellow-400" : "text-red-400"}`}>
+                {pnlMetrics.sharpeRatio.toFixed(2)}
+              </p>
+            </div>
+            {/* Streak */}
+            <div className="bg-[#12141c] rounded-lg p-2 text-center">
+              <p className="text-[9px] text-gray-600 uppercase">{t("pnl.streak", lang)}</p>
+              <p className={`text-sm font-bold font-mono ${pnlMetrics.currentStreak > 0 ? "text-green-400" : pnlMetrics.currentStreak < 0 ? "text-red-400" : "text-gray-500"}`}>
+                {pnlMetrics.currentStreak > 0 ? `+${pnlMetrics.currentStreak}` : pnlMetrics.currentStreak === 0 ? "—" : pnlMetrics.currentStreak}
+              </p>
+              {(pnlMetrics.longestWinStreak > 0 || pnlMetrics.longestLossStreak > 0) && (
+                <p className="text-[9px] text-gray-600">
+                  <span className="text-green-600">{pnlMetrics.longestWinStreak}{t("pnl.wins", lang)}</span>
+                  {" / "}
+                  <span className="text-red-600">{pnlMetrics.longestLossStreak}{t("pnl.losses", lang)}</span>
+                </p>
+              )}
+            </div>
+          </div>
+
+          {/* Equity mini-bar + allocation */}
+          <div className="mt-3 flex items-center gap-3">
+            <div className="flex-1">
+              <div className="flex items-center justify-between mb-1">
+                <span className="text-[9px] text-gray-600 uppercase">{t("pnl.equity", lang)}</span>
+                <span className="text-[10px] font-mono text-gray-400">${fmtUSD(pnlMetrics.totalEquity)}</span>
+              </div>
+              <div className="h-2 bg-gray-800 rounded-full overflow-hidden flex">
+                <div className="h-full bg-blue-500/60 transition-all" style={{ width: `${pnlMetrics.cashPct}%` }}
+                  title={`${t("pnl.cash_pct", lang)}: ${pnlMetrics.cashPct.toFixed(0)}%`} />
+                <div className="h-full bg-green-500/60 transition-all" style={{ width: `${pnlMetrics.positionsPct}%` }}
+                  title={`${t("pnl.pos_pct", lang)}: ${pnlMetrics.positionsPct.toFixed(0)}%`} />
+              </div>
+              <div className="flex justify-between mt-0.5">
+                <span className="text-[9px] text-blue-400">{t("pnl.cash_pct", lang)} {pnlMetrics.cashPct.toFixed(0)}%</span>
+                <span className="text-[9px] text-green-400">{t("pnl.pos_pct", lang)} {pnlMetrics.positionsPct.toFixed(0)}%</span>
+              </div>
+            </div>
+            {pnlMetrics.totalTrades > 0 && (
+              <div className="text-right shrink-0">
+                <p className="text-[9px] text-gray-600">{t("pnl.expectancy", lang)}</p>
+                <p className={`text-xs font-mono font-bold ${pnlMetrics.expectancy >= 0 ? "text-green-400" : "text-red-400"}`}>
+                  {pnlMetrics.expectancy >= 0 ? "+" : ""}${fmtUSD(Math.abs(pnlMetrics.expectancy))}
+                </p>
+                <p className="text-[9px] text-gray-700">{t("pnl.per_trade", lang)}</p>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
 
       {/* JUPITER DEX + ON-CHAIN */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-3 mt-3">
