@@ -54,6 +54,13 @@ import {
   DEFAULT_SWAP_SETTINGS,
   COINGECKO_TO_SYMBOL,
 } from "@/lib/jupiter-swap";
+import {
+  BacktestResult,
+  BacktestConfig,
+  DEFAULT_BACKTEST_CONFIG,
+  fetchBacktestData,
+  runBacktest,
+} from "@/lib/backtest";
 
 // ==================== CONSTANTS ====================
 
@@ -170,6 +177,13 @@ export default function Home() {
     return () => clearInterval(iv);
   }, [publicKey, connected, connection]);
 
+  // Backtesting
+  const [backtestResult, setBacktestResult] = useState<BacktestResult | null>(null);
+  const [backtestRunning, setBacktestRunning] = useState(false);
+  const [backtestProgress, setBacktestProgress] = useState(0);
+  const [backtestConfig, setBacktestConfig] = useState<BacktestConfig>(DEFAULT_BACKTEST_CONFIG);
+  const [showBacktest, setShowBacktest] = useState(false);
+
   // ==================== TOGGLE LOG ====================
 
   const toggleLog = useCallback((id: string) => {
@@ -239,6 +253,33 @@ export default function Home() {
   const dismissToast = useCallback((id: string) => {
     setToasts((prev) => prev.filter((tt) => tt.id !== id));
   }, []);
+
+  const handleRunBacktest = useCallback(async () => {
+    setBacktestRunning(true);
+    setBacktestProgress(0);
+    setBacktestResult(null);
+
+    try {
+      const data = await fetchBacktestData(backtestConfig.coins, backtestConfig.days);
+      if (Object.keys(data).length === 0) {
+        addToast(lang === "ru" ? "Не удалось загрузить данные" : "Failed to load historical data", "error");
+        setBacktestRunning(false);
+        return;
+      }
+
+      const result = runBacktest(data, backtestConfig, (pct) => setBacktestProgress(pct));
+      setBacktestResult(result);
+      const retSign = result.metrics.totalReturn >= 0 ? "+" : "";
+      addToast(
+        `${t("bt.title", lang)}: ${retSign}${result.metrics.totalReturn.toFixed(2)}% | ${t("bt.win_rate", lang)}: ${result.metrics.winRate.toFixed(0)}% | ${result.metrics.totalTrades} ${t("bt.total_trades", lang).toLowerCase()}`,
+        result.metrics.totalReturn >= 0 ? "success" : "error",
+      );
+    } catch (err) {
+      console.error("Backtest error:", err);
+      addToast(lang === "ru" ? "Ошибка бэктеста" : "Backtest error", "error");
+    }
+    setBacktestRunning(false);
+  }, [backtestConfig, lang, addToast]);
 
   const createAgent = useCallback(async () => {
     setIsProcessing(true);
@@ -1328,6 +1369,248 @@ export default function Home() {
             </div>
           )}
         </div>
+      </div>
+
+      {/* BACKTESTING SECTION */}
+      <div className="card p-4 mt-3">
+        <div className="flex items-center justify-between mb-3">
+          <div className="flex items-center gap-2">
+            <p className="text-xs text-gray-500 uppercase tracking-wide font-semibold">{t("bt.title", lang)}</p>
+            <span className="tag bg-orange-500/10 text-orange-400 text-[10px]">
+              {lang === "ru" ? "Тест стратегии" : "Strategy Test"}
+            </span>
+          </div>
+          <button onClick={() => setShowBacktest((v) => !v)}
+            className="btn-secondary px-2.5 py-1 text-[10px] flex items-center gap-1">
+            {showBacktest ? <ChevronUp className="w-3 h-3" /> : <ChevronDown className="w-3 h-3" />}
+            {showBacktest ? (lang === "ru" ? "Скрыть" : "Hide") : (lang === "ru" ? "Показать" : "Show")}
+          </button>
+        </div>
+
+        {showBacktest && (
+          <div className="space-y-4">
+            {/* Config controls */}
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+              <div>
+                <label className="text-[10px] text-gray-500 uppercase tracking-wide">{t("bt.period", lang)}</label>
+                <div className="flex gap-1 mt-1">
+                  {[30, 60, 90].map((d) => (
+                    <button key={d}
+                      onClick={() => setBacktestConfig((c) => ({ ...c, days: d }))}
+                      className={`px-2 py-1 rounded text-xs font-mono ${backtestConfig.days === d ? "bg-orange-500/20 text-orange-400 border border-orange-500/30" : "bg-[#12141c] text-gray-500 hover:text-gray-300"}`}>
+                      {d}{t("bt.days", lang).charAt(0)}
+                    </button>
+                  ))}
+                </div>
+              </div>
+              <div>
+                <label className="text-[10px] text-gray-500 uppercase tracking-wide">{t("bt.capital", lang)}</label>
+                <div className="flex gap-1 mt-1">
+                  {[1000, 5000, 10000].map((c) => (
+                    <button key={c}
+                      onClick={() => setBacktestConfig((cfg) => ({ ...cfg, initialCapital: c }))}
+                      className={`px-2 py-1 rounded text-xs font-mono ${backtestConfig.initialCapital === c ? "bg-orange-500/20 text-orange-400 border border-orange-500/30" : "bg-[#12141c] text-gray-500 hover:text-gray-300"}`}>
+                      ${c >= 1000 ? `${c / 1000}k` : c}
+                    </button>
+                  ))}
+                </div>
+              </div>
+              <div>
+                <label className="text-[10px] text-gray-500 uppercase tracking-wide">{t("bt.strategy_label", lang)}</label>
+                <div className="flex gap-1 mt-1">
+                  {[0, 1, 2].map((s) => (
+                    <button key={s}
+                      onClick={() => setBacktestConfig((c) => ({ ...c, strategy: s }))}
+                      className={`px-2 py-1 rounded text-xs ${backtestConfig.strategy === s ? "bg-orange-500/20 text-orange-400 border border-orange-500/30" : "bg-[#12141c] text-gray-500 hover:text-gray-300"}`}>
+                      {getStrategyName(s, lang)}
+                    </button>
+                  ))}
+                </div>
+              </div>
+              <div className="flex items-end">
+                <button onClick={handleRunBacktest} disabled={backtestRunning}
+                  className="btn-primary px-4 py-1.5 text-xs w-full flex items-center justify-center gap-1.5 disabled:opacity-50">
+                  {backtestRunning ? (
+                    <><Loader2 className="w-3.5 h-3.5 animate-spin" />{t("bt.running", lang)} {backtestProgress}%</>
+                  ) : (
+                    <><BarChart3 className="w-3.5 h-3.5" />{t("bt.run", lang)}</>
+                  )}
+                </button>
+              </div>
+            </div>
+
+            {/* Progress bar */}
+            {backtestRunning && (
+              <div className="h-1.5 bg-gray-800 rounded-full overflow-hidden">
+                <div className="h-full bg-orange-500 rounded-full transition-all duration-300" style={{ width: `${backtestProgress}%` }} />
+              </div>
+            )}
+
+            {/* Results */}
+            {backtestResult && (
+              <div className="space-y-3">
+                {/* Key metrics grid */}
+                <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-2">
+                  {/* Total Return */}
+                  <div className="bg-[#12141c] rounded-lg p-2.5 text-center">
+                    <p className="text-[9px] text-gray-600 uppercase">{t("bt.total_return", lang)}</p>
+                    <p className={`text-lg font-bold font-mono ${backtestResult.metrics.totalReturn >= 0 ? "text-green-400" : "text-red-400"}`}>
+                      {backtestResult.metrics.totalReturn >= 0 ? "+" : ""}{backtestResult.metrics.totalReturn.toFixed(2)}%
+                    </p>
+                    <p className={`text-[10px] font-mono ${backtestResult.metrics.totalReturnUSD >= 0 ? "text-green-600" : "text-red-600"}`}>
+                      {backtestResult.metrics.totalReturnUSD >= 0 ? "+" : ""}${fmtUSD(Math.abs(backtestResult.metrics.totalReturnUSD))}
+                    </p>
+                  </div>
+                  {/* Win Rate */}
+                  <div className="bg-[#12141c] rounded-lg p-2.5 text-center">
+                    <p className="text-[9px] text-gray-600 uppercase">{t("bt.win_rate", lang)}</p>
+                    <p className={`text-lg font-bold font-mono ${backtestResult.metrics.winRate >= 50 ? "text-green-400" : "text-red-400"}`}>
+                      {backtestResult.metrics.winRate.toFixed(1)}%
+                    </p>
+                    <p className="text-[10px] text-gray-600">
+                      {backtestResult.metrics.winningTrades}W / {backtestResult.metrics.losingTrades}L
+                    </p>
+                  </div>
+                  {/* Max Drawdown */}
+                  <div className="bg-[#12141c] rounded-lg p-2.5 text-center">
+                    <p className="text-[9px] text-gray-600 uppercase">{t("bt.max_drawdown", lang)}</p>
+                    <p className="text-lg font-bold font-mono text-red-400">
+                      -{backtestResult.metrics.maxDrawdown.toFixed(2)}%
+                    </p>
+                    <p className="text-[10px] text-red-600 font-mono">
+                      -${fmtUSD(backtestResult.metrics.maxDrawdownUSD)}
+                    </p>
+                  </div>
+                  {/* Sharpe */}
+                  <div className="bg-[#12141c] rounded-lg p-2.5 text-center">
+                    <p className="text-[9px] text-gray-600 uppercase">{t("bt.sharpe", lang)}</p>
+                    <p className={`text-lg font-bold font-mono ${backtestResult.metrics.sharpeRatio >= 1 ? "text-green-400" : backtestResult.metrics.sharpeRatio >= 0 ? "text-yellow-400" : "text-red-400"}`}>
+                      {backtestResult.metrics.sharpeRatio.toFixed(2)}
+                    </p>
+                    <p className="text-[10px] text-gray-600">
+                      {backtestResult.metrics.sharpeRatio >= 2 ? "Excellent" : backtestResult.metrics.sharpeRatio >= 1 ? "Good" : backtestResult.metrics.sharpeRatio >= 0 ? "OK" : "Poor"}
+                    </p>
+                  </div>
+                  {/* Profit Factor */}
+                  <div className="bg-[#12141c] rounded-lg p-2.5 text-center">
+                    <p className="text-[9px] text-gray-600 uppercase">{t("bt.profit_factor", lang)}</p>
+                    <p className={`text-lg font-bold font-mono ${backtestResult.metrics.profitFactor >= 1.5 ? "text-green-400" : backtestResult.metrics.profitFactor >= 1 ? "text-yellow-400" : "text-red-400"}`}>
+                      {backtestResult.metrics.profitFactor === Infinity ? "∞" : backtestResult.metrics.profitFactor.toFixed(2)}
+                    </p>
+                    <p className="text-[10px] text-gray-600">{t("bt.total_trades", lang)}: {backtestResult.metrics.totalTrades}</p>
+                  </div>
+                  {/* Final Capital */}
+                  <div className="bg-[#12141c] rounded-lg p-2.5 text-center">
+                    <p className="text-[9px] text-gray-600 uppercase">{t("bt.final_capital", lang)}</p>
+                    <p className="text-lg font-bold font-mono text-white">
+                      ${fmtUSD(backtestResult.finalCapital)}
+                    </p>
+                    <p className="text-[10px] text-gray-600">
+                      {backtestResult.durationDays} {t("bt.days", lang)}
+                    </p>
+                  </div>
+                </div>
+
+                {/* Secondary metrics */}
+                <div className="grid grid-cols-3 md:grid-cols-6 gap-1.5">
+                  <div className="bg-[#12141c] rounded px-2 py-1.5 text-center">
+                    <p className="text-[9px] text-gray-600">{t("bt.annual_return", lang)}</p>
+                    <p className={`text-xs font-mono font-bold ${backtestResult.metrics.annualizedReturn >= 0 ? "text-green-400" : "text-red-400"}`}>
+                      {backtestResult.metrics.annualizedReturn >= 0 ? "+" : ""}{backtestResult.metrics.annualizedReturn.toFixed(1)}%
+                    </p>
+                  </div>
+                  <div className="bg-[#12141c] rounded px-2 py-1.5 text-center">
+                    <p className="text-[9px] text-gray-600">{t("bt.sortino", lang)}</p>
+                    <p className={`text-xs font-mono font-bold ${backtestResult.metrics.sortinoRatio >= 1 ? "text-green-400" : "text-yellow-400"}`}>
+                      {backtestResult.metrics.sortinoRatio.toFixed(2)}
+                    </p>
+                  </div>
+                  <div className="bg-[#12141c] rounded px-2 py-1.5 text-center">
+                    <p className="text-[9px] text-gray-600">{t("bt.avg_win", lang)}</p>
+                    <p className="text-xs font-mono font-bold text-green-400">${fmtUSD(backtestResult.metrics.avgWinUSD)}</p>
+                  </div>
+                  <div className="bg-[#12141c] rounded px-2 py-1.5 text-center">
+                    <p className="text-[9px] text-gray-600">{t("bt.avg_loss", lang)}</p>
+                    <p className="text-xs font-mono font-bold text-red-400">${fmtUSD(backtestResult.metrics.avgLossUSD)}</p>
+                  </div>
+                  <div className="bg-[#12141c] rounded px-2 py-1.5 text-center">
+                    <p className="text-[9px] text-gray-600">{t("bt.best_trade", lang)}</p>
+                    <p className="text-xs font-mono font-bold text-green-400">+{backtestResult.metrics.bestTrade.toFixed(1)}%</p>
+                  </div>
+                  <div className="bg-[#12141c] rounded px-2 py-1.5 text-center">
+                    <p className="text-[9px] text-gray-600">{t("bt.worst_trade", lang)}</p>
+                    <p className="text-xs font-mono font-bold text-red-400">{backtestResult.metrics.worstTrade.toFixed(1)}%</p>
+                  </div>
+                </div>
+
+                {/* Equity Curve (simple text-based visualization) */}
+                {backtestResult.equityCurve.length > 0 && (
+                  <div className="bg-[#12141c] rounded-lg p-3">
+                    <p className="text-[10px] text-gray-500 uppercase tracking-wide mb-2">{t("bt.equity_curve", lang)}</p>
+                    <div className="flex items-end gap-px h-24">
+                      {(() => {
+                        const curve = backtestResult.equityCurve;
+                        // Sample ~80 points for display
+                        const step = Math.max(1, Math.floor(curve.length / 80));
+                        const sampled = curve.filter((_, i) => i % step === 0);
+                        const minEq = Math.min(...sampled.map((p) => p.equity));
+                        const maxEq = Math.max(...sampled.map((p) => p.equity));
+                        const range = maxEq - minEq || 1;
+
+                        return sampled.map((pt, i) => {
+                          const h = ((pt.equity - minEq) / range) * 100;
+                          const isProfit = pt.equity >= backtestResult.initialCapital;
+                          return (
+                            <div key={i}
+                              className={`flex-1 min-w-[1px] rounded-t-sm ${isProfit ? "bg-green-500/60" : "bg-red-500/60"}`}
+                              style={{ height: `${Math.max(2, h)}%` }}
+                              title={`$${pt.equity.toFixed(0)} | ${new Date(pt.timestamp * 1000).toLocaleDateString()}`}
+                            />
+                          );
+                        });
+                      })()}
+                    </div>
+                    <div className="flex justify-between mt-1">
+                      <span className="text-[9px] text-gray-700">{backtestResult.startDate.toLocaleDateString()}</span>
+                      <span className="text-[9px] text-gray-700">{backtestResult.endDate.toLocaleDateString()}</span>
+                    </div>
+                  </div>
+                )}
+
+                {/* Trade Log */}
+                {backtestResult.trades.length > 0 && (
+                  <div>
+                    <p className="text-[10px] text-gray-500 uppercase tracking-wide mb-1.5">{t("bt.trade_log", lang)} ({backtestResult.trades.length})</p>
+                    <div className="max-h-40 overflow-y-auto space-y-1">
+                      {backtestResult.trades.slice(-20).reverse().map((tr, i) => (
+                        <div key={i} className="flex items-center gap-2 bg-[#12141c] rounded px-2.5 py-1.5">
+                          <span className={`text-[9px] font-bold uppercase px-1.5 py-0.5 rounded min-w-[36px] text-center ${
+                            tr.action === "BUY" ? "bg-green-500/15 text-green-400" : "bg-red-500/15 text-red-400"
+                          }`}>{tr.action}</span>
+                          <span className="text-xs font-mono text-gray-300 min-w-[36px]">{tr.symbol}</span>
+                          <span className="text-[10px] font-mono text-gray-400 flex-1">
+                            ${fmtUSD(tr.amountUSD)} @ ${fmtUSD(tr.price)}
+                          </span>
+                          <span className={`text-[10px] font-mono ${tr.confidence >= 0.5 ? "text-green-400" : "text-yellow-400"}`}>
+                            {Math.round(tr.confidence * 100)}%
+                          </span>
+                          <span className="text-[10px] text-gray-700">
+                            {new Date(tr.timestamp * 1000).toLocaleDateString()}
+                          </span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* No results state */}
+            {!backtestResult && !backtestRunning && (
+              <p className="text-xs text-gray-600 text-center py-4">{t("bt.no_data", lang)}</p>
+            )}
+          </div>
+        )}
       </div>
     </div>
   );
