@@ -196,6 +196,25 @@ solana airdrop 2
 solana program deploy target/deploy/ai_asset_manager.so
 ```
 
+### 24/7 Trading Bot (headless)
+
+```bash
+cd bot
+cp .env.example .env
+# Edit .env: set keypair path, RPC, strategy, Telegram tokens
+npm install
+npm run build
+npm start
+```
+
+The bot runs autonomously without a browser:
+- **Market data** from CoinGecko (OHLCV + price history)
+- **9 TA indicators** → composite AI decision
+- **Jupiter DEX** swaps signed with local keypair
+- **Telegram alerts** on every BUY/SELL + periodic P&L reports
+- **State persistence** to JSON file (survives restarts)
+- **Graceful shutdown** on SIGINT/SIGTERM
+
 ---
 
 ## Demo Flow
@@ -208,6 +227,8 @@ solana program deploy target/deploy/ai_asset_manager.so
 6. **On-chain TX** — every trade recorded on Solana, viewable in Explorer
 7. **Auto Mode** — AI runs every 15 seconds autonomously
 8. **Switch strategy** — change risk profile in real-time
+9. **Telegram alerts** — receive BUY/SELL notifications + P&L reports
+10. **24/7 Bot** — deploy headless bot for round-the-clock trading
 
 ---
 
@@ -226,11 +247,24 @@ ai-asset-manager/
 │   │   ├── market-data.ts               # CoinGecko real data fetcher
 │   │   ├── solana-integration.ts         # On-chain TX helpers
 │   │   ├── jupiter-swap.ts              # Jupiter DEX integration (real swaps)
-│   │   └── i18n.ts                      # EN/RU translations
+│   │   ├── backtest.ts                  # Backtesting engine (historical simulation)
+│   │   ├── pnl-tracker.ts              # Realtime P&L tracking + FIFO matching
+│   │   ├── telegram-bot.ts             # Telegram alerts (browser-side)
+│   │   └── i18n.ts                      # EN/RU translations (250+ keys)
 │   ├── components/
 │   │   ├── PriceChart.tsx               # TradingView-style charts
 │   │   └── WalletProvider.tsx           # Phantom wallet adapter
 │   └── idl/ai_asset_manager.json        # Program IDL
+├── bot/
+│   ├── src/
+│   │   ├── index.ts                     # Main 24/7 trading loop
+│   │   ├── config.ts                    # ENV config + logger
+│   │   ├── market-data.ts              # CoinGecko fetcher (Node.js)
+│   │   ├── technical-analysis.ts        # 9 TA indicators (standalone)
+│   │   └── telegram.ts                 # Telegram alerts (Node.js)
+│   ├── .env.example                     # Configuration template
+│   ├── package.json
+│   └── tsconfig.json
 ├── Anchor.toml
 └── README.md
 ```
@@ -240,12 +274,15 @@ ai-asset-manager/
 ## Tech Stack
 
 - **Solana** + **Anchor** (Rust) — smart contract
-- **Next.js 14** (App Router) — frontend
+- **Next.js 14** (App Router) — frontend dashboard
 - **TailwindCSS** — styling
 - **lightweight-charts** — TradingView-style charts
 - **CoinGecko API** — real market data
-- **Phantom Wallet Adapter** — Solana wallet
-- **TypeScript** — type-safe AI engine
+- **Jupiter DEX API** — real token swaps on Solana
+- **Phantom Wallet Adapter** — browser wallet
+- **Node.js** — headless 24/7 trading bot
+- **Telegram Bot API** — trade alerts & P&L reports
+- **TypeScript** — type-safe AI engine across all modules
 - **Lucide React** — icons
 
 ---
@@ -255,10 +292,9 @@ ai-asset-manager/
 | Criteria | How We Score |
 |---|---|
 | **Product & Idea (20)** | Real problem: autonomous 24/7 trading without emotions |
-| **Technical (25)** | Full-stack: Rust contract + TS AI engine + 9 indicators + real data |
-| **Use of Solana (15)** | PDA state, on-chain trades, AI reasoning hashes, strategy governance |
-| **Innovation (15)** | AI reasoning transparency via on-chain SHA-256 audit trail |
-| **UX (10)** | Professional trading UI, bilingual, strategy switcher, charts |
+| **Technical (25)** | Full-stack: Rust contract + TS AI engine + 9 indicators + real data + headless bot |
+| **Use of Solana (15)** | PDA state, on-chain trades, AI reasoning hashes, Jupiter DEX swaps |
+| **Innovation (15)** | AI reasoning transparency via on-chain SHA-256 audit trail + 24/7 autonomous trading |
+| **UX (10)** | Professional trading UI, bilingual, strategy switcher, charts, Telegram alerts |
 | **Demo (10)** | Live demo with real prices, wallet connection, on-chain TXs |
 | **Docs (5)** | This README + inline code docs |
-# solana_2_track_Pulse
