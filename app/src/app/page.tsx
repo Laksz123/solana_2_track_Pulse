@@ -45,7 +45,15 @@ import {
   logAIDecisionOnChain, updateStrategyOnChain, fetchAgentOnChain,
   TOKEN_IDS, SOLANA_NETWORK,
 } from "@/lib/solana-integration";
-import { LAMPORTS_PER_SOL } from "@solana/web3.js";
+import { LAMPORTS_PER_SOL, VersionedTransaction } from "@solana/web3.js";
+import {
+  executeAITrade,
+  fetchTokenBalances,
+  SwapSettings,
+  SwapResult,
+  DEFAULT_SWAP_SETTINGS,
+  COINGECKO_TO_SYMBOL,
+} from "@/lib/jupiter-swap";
 
 // ==================== CONSTANTS ====================
 
@@ -143,6 +151,24 @@ export default function Home() {
   const [chartCandles, setChartCandles] = useState<Record<string, ChartCandle[]>>({});
   const [dataLoading, setDataLoading] = useState(true);
   const [lastDecisions, setLastDecisions] = useState<AITradeDecision[]>([]);
+
+  // Jupiter DEX integration
+  const [swapSettings, setSwapSettings] = useState<SwapSettings>(DEFAULT_SWAP_SETTINGS);
+  const [tokenBalances, setTokenBalances] = useState<Record<string, number>>({});
+  const [showSwapSettings, setShowSwapSettings] = useState(false);
+  const [pendingSwap, setPendingSwap] = useState<{ decision: AITradeDecision; resolve: (confirmed: boolean) => void } | null>(null);
+  const [lastSwapResults, setLastSwapResults] = useState<SwapResult[]>([]);
+
+  // Fetch token balances when wallet connects
+  useEffect(() => {
+    if (!publicKey || !connected) { setTokenBalances({}); return; }
+    const fetchBals = () => {
+      fetchTokenBalances(connection, publicKey).then(setTokenBalances).catch(() => {});
+    };
+    fetchBals();
+    const iv = setInterval(fetchBals, 15000);
+    return () => clearInterval(iv);
+  }, [publicKey, connected, connection]);
 
   // ==================== TOGGLE LOG ====================
 
@@ -281,7 +307,7 @@ export default function Home() {
 
   // ==================== AI RUN ====================
 
-  const runAI = useCallback(() => {
+  const runAI = useCallback(async () => {
     if (!agent.exists || assets.length === 0 || Object.keys(ohlcMap).length === 0) return;
     setIsProcessing(true);
 
@@ -323,6 +349,52 @@ export default function Home() {
       timestamp: ts,
     };
 
+    // ==================== JUPITER DEX SWAP ====================
+    // If wallet connected and action is BUY/SELL, execute swap via Jupiter
+    let swapResult: SwapResult | null = null;
+    if (connected && publicKey && signTransaction && topDecision.action !== "HOLD" && topDecision.amountUSD > 0) {
+      // Get SOL price for conversion
+      const solAsset = assets.find((a) => a.id === "solana");
+      const solPrice = solAsset?.currentPrice || 0;
+
+      // Confirmation dialog (if enabled and real swaps active)
+      if (swapSettings.enableRealSwaps && swapSettings.confirmBeforeSwap && !isAutoMode) {
+        const confirmed = await new Promise<boolean>((resolve) => {
+          setPendingSwap({ decision: topDecision, resolve });
+        });
+        setPendingSwap(null);
+        if (!confirmed) {
+          addToast(lang === "ru" ? "Своп отменён пользователем" : "Swap cancelled by user", "info");
+          setIsProcessing(false);
+          return;
+        }
+      }
+
+      // Execute swap (real or simulated)
+      const signVersionedTx = signTransaction as (tx: VersionedTransaction) => Promise<VersionedTransaction>;
+      swapResult = await executeAITrade(
+        connection, publicKey, signVersionedTx,
+        topDecision.action, topDecision.coinId, topDecision.amountUSD,
+        solPrice, topDecision.currentPrice, swapSettings,
+      );
+
+      // Track result
+      setLastSwapResults((prev) => [swapResult!, ...prev.slice(0, 19)]);
+
+      if (swapResult.success) {
+        const modeLabel = swapSettings.enableRealSwaps ? "Jupiter" : "Sim";
+        addToast(
+          `[${modeLabel}] ${topDecision.action} ${topDecision.symbol}: ${swapResult.inputAmount.toFixed(4)} ${swapResult.inputSymbol} → ${swapResult.outputAmount.toFixed(4)} ${swapResult.outputSymbol}`,
+          "success",
+        );
+        if (swapResult.signature && !swapResult.signature.startsWith("sim_")) {
+          addTxSig(swapResult.signature);
+        }
+      } else {
+        addToast(`${t("jupiter.swap_failed", lang)}: ${swapResult.error?.slice(0, 80)}`, "error");
+      }
+    }
+
     if (topDecision.action === "BUY" && topDecision.amountUSD > 0) {
       // HARD GUARD: never spend more than we have
       const buyAmount = Math.min(topDecision.amountUSD, agent.balanceUSD);
@@ -352,7 +424,7 @@ export default function Home() {
         }
         return { ...p, balanceUSD: p.balanceUSD - actualSpend, positions: pos, history: [...p.history, hEntry] };
       });
-      addToast(`BUY ${topDecision.symbol}: $${fmtUSD(buyAmount)} @ $${fmtUSD(topDecision.currentPrice)}`, "success");
+      if (!swapResult) addToast(`BUY ${topDecision.symbol}: $${fmtUSD(buyAmount)} @ $${fmtUSD(topDecision.currentPrice)}`, "success");
     } else if (topDecision.action === "SELL" && topDecision.amountUSD > 0) {
       const units = topDecision.amountUSD / topDecision.currentPrice;
       setAgent((p) => {
@@ -361,7 +433,7 @@ export default function Home() {
         ).filter((x) => x.amount > 0.0001);
         return { ...p, balanceUSD: p.balanceUSD + topDecision.amountUSD, positions: pos, history: [...p.history, hEntry] };
       });
-      addToast(`SELL ${topDecision.symbol}: $${fmtUSD(topDecision.amountUSD)} @ $${fmtUSD(topDecision.currentPrice)}`, "success");
+      if (!swapResult) addToast(`SELL ${topDecision.symbol}: $${fmtUSD(topDecision.amountUSD)} @ $${fmtUSD(topDecision.currentPrice)}`, "success");
     } else {
       setAgent((p) => ({ ...p, history: [...p.history, hEntry] }));
     }
@@ -400,24 +472,24 @@ export default function Home() {
     }
 
     // ==================== ON-CHAIN EXECUTION ====================
-    // If wallet connected, record AI decision on Solana blockchain
+    // If wallet connected, record AI decision on Solana blockchain (PDA state)
     const provider = getProvider();
     if (provider && publicKey && topDecision.action !== "HOLD") {
       const program = getProgram(provider);
       const actionCode = topDecision.action === "BUY" ? 1 : 2;
       const tokenId = TOKEN_IDS[topDecision.coinId] ?? 0;
-      const amountLamports = Math.round(topDecision.amountUSD * 1e6); // USD cents as lamports representation
+      const amountLamports = Math.round(topDecision.amountUSD * 1e6);
       const priceLamports = Math.round(topDecision.currentPrice * 1e6);
       const confPct = Math.round(topDecision.confidence * 100);
 
       // Fire-and-forget on-chain calls (don't block UI)
       (async () => {
         try {
-          // 1. Execute trade on-chain
+          // 1. Execute trade on-chain (PDA state update)
           const tradeResult = await executeTradeOnChain(program, publicKey, actionCode, tokenId, amountLamports, priceLamports);
           if (tradeResult.success && tradeResult.signature) {
             addTxSig(tradeResult.signature);
-            addToast(`✓ On-chain TX: ${tradeResult.signature.slice(0, 8)}...`, "info");
+            addToast(`✓ On-chain PDA: ${tradeResult.signature.slice(0, 8)}...`, "info");
           }
 
           // 2. Log AI reasoning on-chain (transparency)
@@ -434,7 +506,7 @@ export default function Home() {
     }
 
     setIsProcessing(false);
-  }, [agent, assets, ohlcMap, addToast, getProvider, publicKey, addTxSig]);
+  }, [agent, assets, ohlcMap, addToast, getProvider, publicKey, addTxSig, connected, signTransaction, connection, swapSettings, isAutoMode, lang]);
 
   // ==================== STRATEGY SCREEN ====================
 
@@ -535,6 +607,134 @@ export default function Home() {
               </button>
             </div>
           ))}
+        </div>
+      )}
+
+      {/* Swap Confirmation Modal */}
+      {pendingSwap && (
+        <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/60 backdrop-blur-sm">
+          <div className="card p-6 max-w-sm w-full mx-4 border-yellow-500/30">
+            <div className="flex items-center gap-2 mb-3">
+              <AlertTriangle className="w-5 h-5 text-yellow-400" />
+              <h3 className="text-sm font-bold text-white">{t("jupiter.confirm_title", lang)}</h3>
+            </div>
+            <p className="text-xs text-gray-400 mb-4">{t("jupiter.confirm_desc", lang)}</p>
+            <div className="bg-[#12141c] rounded-lg p-3 mb-4 space-y-1.5">
+              <div className="flex justify-between text-xs">
+                <span className="text-gray-500">Action</span>
+                <span className={pendingSwap.decision.action === "BUY" ? "text-green-400 font-bold" : "text-red-400 font-bold"}>
+                  {pendingSwap.decision.action} {pendingSwap.decision.symbol}
+                </span>
+              </div>
+              <div className="flex justify-between text-xs">
+                <span className="text-gray-500">Amount</span>
+                <span className="text-white font-mono">${fmtUSD(pendingSwap.decision.amountUSD)}</span>
+              </div>
+              <div className="flex justify-between text-xs">
+                <span className="text-gray-500">Price</span>
+                <span className="text-gray-300 font-mono">${fmtUSD(pendingSwap.decision.currentPrice)}</span>
+              </div>
+              <div className="flex justify-between text-xs">
+                <span className="text-gray-500">Confidence</span>
+                <span className="text-gray-300">{Math.round(pendingSwap.decision.confidence * 100)}%</span>
+              </div>
+              <div className="flex justify-between text-xs">
+                <span className="text-gray-500">Slippage</span>
+                <span className="text-gray-300">{(swapSettings.slippageBps / 100).toFixed(1)}%</span>
+              </div>
+            </div>
+            <div className="flex gap-2">
+              <button onClick={() => pendingSwap.resolve(false)}
+                className="btn-secondary flex-1 py-2 text-xs">{t("jupiter.confirm_no", lang)}</button>
+              <button onClick={() => pendingSwap.resolve(true)}
+                className="btn-primary flex-1 py-2 text-xs">{t("jupiter.confirm_yes", lang)}</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Jupiter Swap Settings Overlay */}
+      {showSwapSettings && (
+        <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/60 backdrop-blur-sm">
+          <div className="card p-6 max-w-md w-full mx-4">
+            <div className="flex items-center justify-between mb-4">
+              <h3 className="text-sm font-bold text-white">{t("jupiter.settings", lang)}</h3>
+              <button onClick={() => setShowSwapSettings(false)}><X className="w-4 h-4 text-gray-500 hover:text-white" /></button>
+            </div>
+
+            {/* Real Swaps Toggle */}
+            <div className={`rounded-lg p-3 mb-4 border ${swapSettings.enableRealSwaps ? "bg-red-950/30 border-red-500/30" : "bg-[#12141c] border-gray-800/50"}`}>
+              <div className="flex items-center justify-between mb-2">
+                <span className="text-xs font-semibold text-gray-300">{t("jupiter.real_swaps", lang)}</span>
+                <button
+                  onClick={() => setSwapSettings((s) => ({ ...s, enableRealSwaps: !s.enableRealSwaps }))}
+                  className={`relative w-10 h-5 rounded-full transition-colors ${swapSettings.enableRealSwaps ? "bg-red-500" : "bg-gray-700"}`}>
+                  <div className={`absolute top-0.5 w-4 h-4 rounded-full bg-white transition-transform ${swapSettings.enableRealSwaps ? "translate-x-5" : "translate-x-0.5"}`} />
+                </button>
+              </div>
+              <p className="text-[10px] text-gray-500">
+                {swapSettings.enableRealSwaps ? t("jupiter.real_desc", lang) : t("jupiter.sim_desc", lang)}
+              </p>
+            </div>
+
+            {/* Slippage */}
+            <div className="space-y-3">
+              <div>
+                <label className="text-[10px] text-gray-500 uppercase tracking-wide">{t("jupiter.slippage", lang)}</label>
+                <div className="flex gap-1.5 mt-1">
+                  {[25, 50, 100, 200].map((bps) => (
+                    <button key={bps}
+                      onClick={() => setSwapSettings((s) => ({ ...s, slippageBps: bps }))}
+                      className={`px-2.5 py-1 rounded text-xs font-mono ${swapSettings.slippageBps === bps ? "bg-green-500/20 text-green-400 border border-green-500/30" : "bg-[#12141c] text-gray-500 hover:text-gray-300"}`}>
+                      {(bps / 100).toFixed(1)}%
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              {/* Max Price Impact */}
+              <div>
+                <label className="text-[10px] text-gray-500 uppercase tracking-wide">{t("jupiter.max_impact", lang)}</label>
+                <div className="flex gap-1.5 mt-1">
+                  {[0.5, 1.0, 2.0, 5.0].map((pct) => (
+                    <button key={pct}
+                      onClick={() => setSwapSettings((s) => ({ ...s, maxPriceImpactPct: pct }))}
+                      className={`px-2.5 py-1 rounded text-xs font-mono ${swapSettings.maxPriceImpactPct === pct ? "bg-green-500/20 text-green-400 border border-green-500/30" : "bg-[#12141c] text-gray-500 hover:text-gray-300"}`}>
+                      {pct}%
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              {/* Max Trade Size */}
+              <div>
+                <label className="text-[10px] text-gray-500 uppercase tracking-wide">{t("jupiter.max_trade", lang)}</label>
+                <div className="flex gap-1.5 mt-1">
+                  {[50, 100, 250, 500].map((usd) => (
+                    <button key={usd}
+                      onClick={() => setSwapSettings((s) => ({ ...s, maxTradeUSD: usd }))}
+                      className={`px-2.5 py-1 rounded text-xs font-mono ${swapSettings.maxTradeUSD === usd ? "bg-green-500/20 text-green-400 border border-green-500/30" : "bg-[#12141c] text-gray-500 hover:text-gray-300"}`}>
+                      ${usd}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              {/* Confirm Before Swap */}
+              <div className="flex items-center justify-between">
+                <span className="text-xs text-gray-400">{lang === "ru" ? "Подтверждение перед свопом" : "Confirm before swap"}</span>
+                <button
+                  onClick={() => setSwapSettings((s) => ({ ...s, confirmBeforeSwap: !s.confirmBeforeSwap }))}
+                  className={`relative w-10 h-5 rounded-full transition-colors ${swapSettings.confirmBeforeSwap ? "bg-green-500" : "bg-gray-700"}`}>
+                  <div className={`absolute top-0.5 w-4 h-4 rounded-full bg-white transition-transform ${swapSettings.confirmBeforeSwap ? "translate-x-5" : "translate-x-0.5"}`} />
+                </button>
+              </div>
+            </div>
+
+            <button onClick={() => setShowSwapSettings(false)} className="btn-primary w-full py-2 text-xs mt-4">
+              {lang === "ru" ? "Сохранить" : "Save"}
+            </button>
+          </div>
         </div>
       )}
 
@@ -995,57 +1195,139 @@ export default function Home() {
         </div>
       </div>
 
-      {/* ON-CHAIN TRANSACTIONS */}
-      <div className="card p-4 mt-3">
-        <div className="flex items-center justify-between mb-2">
-          <div className="flex items-center gap-2">
-            <p className="text-xs text-gray-500 uppercase tracking-wide font-semibold">Solana On-Chain</p>
-            <span className="tag bg-purple-500/10 text-purple-400 text-[10px]">{SOLANA_NETWORK}</span>
-            {connected && <div className="w-2 h-2 rounded-full bg-green-400" />}
-          </div>
-          {!connected && (
-            <button onClick={() => setWalletModalVisible(true)}
-              className="btn-secondary px-2.5 py-1 text-[10px] flex items-center gap-1">
-              <Wallet className="w-3 h-3" /> Connect Phantom
+      {/* JUPITER DEX + ON-CHAIN */}
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-3 mt-3">
+
+        {/* Jupiter DEX Status */}
+        <div className="card p-4">
+          <div className="flex items-center justify-between mb-2">
+            <div className="flex items-center gap-2">
+              <p className="text-xs text-gray-500 uppercase tracking-wide font-semibold">{t("jupiter.title", lang)}</p>
+              <span className={`tag text-[10px] ${swapSettings.enableRealSwaps ? "bg-red-500/10 text-red-400" : "bg-green-500/10 text-green-400"}`}>
+                {swapSettings.enableRealSwaps ? "LIVE" : t("jupiter.simulation", lang)}
+              </span>
+            </div>
+            <button onClick={() => setShowSwapSettings(true)}
+              className="btn-secondary px-2 py-1 text-[10px]">
+              {t("jupiter.settings", lang)}
             </button>
+          </div>
+
+          <div className="space-y-1.5 text-[11px]">
+            <div className="flex justify-between">
+              <span className="text-gray-600">{t("jupiter.slippage", lang)}</span>
+              <span className="text-gray-400 font-mono">{(swapSettings.slippageBps / 100).toFixed(1)}%</span>
+            </div>
+            <div className="flex justify-between">
+              <span className="text-gray-600">{t("jupiter.max_trade", lang)}</span>
+              <span className="text-gray-400 font-mono">${swapSettings.maxTradeUSD}</span>
+            </div>
+            <div className="flex justify-between">
+              <span className="text-gray-600">{t("jupiter.max_impact", lang)}</span>
+              <span className="text-gray-400 font-mono">{swapSettings.maxPriceImpactPct}%</span>
+            </div>
+          </div>
+
+          {/* Last swap results */}
+          {lastSwapResults.length > 0 && (
+            <div className="mt-3 border-t border-gray-800/50 pt-2">
+              <p className="text-[10px] text-gray-600 mb-1.5">{lang === "ru" ? "Последние свопы" : "Recent Swaps"}</p>
+              <div className="space-y-1">
+                {lastSwapResults.slice(0, 4).map((sr, i) => (
+                  <div key={i} className={`flex items-center justify-between bg-[#12141c] rounded px-2 py-1 ${sr.success ? "" : "opacity-50"}`}>
+                    <span className="text-[10px] font-mono text-gray-400">
+                      {sr.inputAmount.toFixed(3)} {sr.inputSymbol} → {sr.outputAmount.toFixed(3)} {sr.outputSymbol}
+                    </span>
+                    {sr.success
+                      ? <CheckCircle2 className="w-3 h-3 text-green-400" />
+                      : <AlertTriangle className="w-3 h-3 text-red-400" />}
+                  </div>
+                ))}
+              </div>
+            </div>
           )}
         </div>
 
-        {!connected ? (
-          <div className="text-center py-4">
-            <p className="text-xs text-gray-600 mb-2">
-              {lang === "ru"
-                ? "Подключите Phantom для записи AI-решений в блокчейн Solana"
-                : "Connect Phantom to record AI decisions on Solana blockchain"}
-            </p>
-            <p className="text-[10px] text-gray-700">
-              AI → Decision → On-chain TX → Smart Contract State Change
-            </p>
-          </div>
-        ) : (
-          <div className="space-y-1.5">
-            {txSignatures.length === 0 ? (
-              <p className="text-xs text-gray-600 text-center py-2">
-                {lang === "ru"
-                  ? "Запустите ИИ — каждое BUY/SELL будет записано on-chain"
-                  : "Run AI — every BUY/SELL will be recorded on-chain"}
-              </p>
-            ) : (
-              txSignatures.slice(0, 8).map((sig, i) => (
-                <div key={sig + i} className="flex items-center justify-between bg-[#12141c] rounded px-3 py-1.5">
-                  <div className="flex items-center gap-2">
-                    <CheckCircle2 className="w-3 h-3 text-green-400" />
-                    <span className="font-mono text-[10px] text-gray-400">{sig.slice(0, 16)}...{sig.slice(-8)}</span>
-                  </div>
-                  <a href={getExplorerUrl(sig)} target="_blank" rel="noopener noreferrer"
-                    className="text-[10px] text-blue-400 hover:text-blue-300 underline">
-                    Solana Explorer →
-                  </a>
-                </div>
-              ))
+        {/* Token Balances */}
+        <div className="card p-4">
+          <p className="text-xs text-gray-500 uppercase tracking-wide font-semibold mb-2">{t("jupiter.balances", lang)}</p>
+          {!connected ? (
+            <p className="text-xs text-gray-600 text-center py-4">{t("jupiter.no_wallet", lang)}</p>
+          ) : Object.keys(tokenBalances).length === 0 ? (
+            <div className="flex items-center justify-center py-4">
+              <Loader2 className="w-4 h-4 text-gray-600 animate-spin" />
+            </div>
+          ) : (
+            <div className="space-y-1.5">
+              {Object.entries(tokenBalances)
+                .filter(([, bal]) => bal > 0.000001)
+                .sort(([, a], [, b]) => b - a)
+                .map(([sym, bal]) => {
+                  const asset = assets.find((a) => COINGECKO_TO_SYMBOL[a.id] === sym);
+                  const usdVal = asset ? bal * asset.currentPrice : 0;
+                  return (
+                    <div key={sym} className="flex items-center justify-between bg-[#12141c] rounded-lg px-2.5 py-1.5">
+                      <div>
+                        <span className="font-mono text-xs text-gray-300 font-medium">{sym}</span>
+                        <span className="text-[10px] text-gray-600 ml-1.5">{bal < 0.01 ? bal.toFixed(6) : bal < 1 ? bal.toFixed(4) : bal.toFixed(2)}</span>
+                      </div>
+                      {usdVal > 0.01 && (
+                        <span className="font-mono text-[10px] text-gray-500">${fmtUSD(usdVal)}</span>
+                      )}
+                    </div>
+                  );
+                })}
+            </div>
+          )}
+        </div>
+
+        {/* On-Chain Transactions */}
+        <div className="card p-4">
+          <div className="flex items-center justify-between mb-2">
+            <div className="flex items-center gap-2">
+              <p className="text-xs text-gray-500 uppercase tracking-wide font-semibold">On-Chain TX</p>
+              <span className="tag bg-purple-500/10 text-purple-400 text-[10px]">{SOLANA_NETWORK}</span>
+              {connected && <div className="w-2 h-2 rounded-full bg-green-400" />}
+            </div>
+            {!connected && (
+              <button onClick={() => setWalletModalVisible(true)}
+                className="btn-secondary px-2 py-1 text-[10px] flex items-center gap-1">
+                <Wallet className="w-3 h-3" /> Connect
+              </button>
             )}
           </div>
-        )}
+
+          {!connected ? (
+            <p className="text-xs text-gray-600 text-center py-4">
+              {lang === "ru"
+                ? "Подключи Phantom для записи в блокчейн"
+                : "Connect Phantom for on-chain recording"}
+            </p>
+          ) : (
+            <div className="space-y-1.5">
+              {txSignatures.length === 0 ? (
+                <p className="text-xs text-gray-600 text-center py-2">
+                  {lang === "ru"
+                    ? "Запусти ИИ — BUY/SELL запишется on-chain"
+                    : "Run AI — BUY/SELL will be recorded on-chain"}
+                </p>
+              ) : (
+                txSignatures.slice(0, 6).map((sig, i) => (
+                  <div key={sig + i} className="flex items-center justify-between bg-[#12141c] rounded px-2.5 py-1.5">
+                    <div className="flex items-center gap-1.5">
+                      <CheckCircle2 className="w-3 h-3 text-green-400" />
+                      <span className="font-mono text-[10px] text-gray-400">{sig.slice(0, 12)}...{sig.slice(-6)}</span>
+                    </div>
+                    <a href={getExplorerUrl(sig)} target="_blank" rel="noopener noreferrer"
+                      className="text-[10px] text-blue-400 hover:text-blue-300 underline">
+                      Explorer →
+                    </a>
+                  </div>
+                ))
+              )}
+            </div>
+          )}
+        </div>
       </div>
     </div>
   );

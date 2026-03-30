@@ -120,6 +120,29 @@ const translations = {
   "sys.invalid_deposit": { en: "Invalid amount or insufficient balance", ru: "Неверная сумма или недостаточно средств" },
   "sys.invalid_withdraw": { en: "Invalid amount or insufficient agent balance", ru: "Неверная сумма или недостаточно на балансе агента" },
   "sys.market_switched": { en: "Switched market to", ru: "Рынок переключён на" },
+
+  // Jupiter DEX
+  "jupiter.title": { en: "Jupiter DEX", ru: "Jupiter DEX" },
+  "jupiter.settings": { en: "Swap Settings", ru: "Настройки свопов" },
+  "jupiter.slippage": { en: "Slippage", ru: "Проскальзывание" },
+  "jupiter.max_impact": { en: "Max Price Impact", ru: "Макс. влияние на цену" },
+  "jupiter.max_trade": { en: "Max Trade Size", ru: "Макс. размер сделки" },
+  "jupiter.real_swaps": { en: "Real Swaps", ru: "Реальные свопы" },
+  "jupiter.simulation": { en: "Simulation Mode", ru: "Режим симуляции" },
+  "jupiter.sim_desc": { en: "AI trades are simulated. Enable real swaps to trade with actual funds.", ru: "Сделки ИИ симулируются. Включи реальные свопы для торговли настоящими средствами." },
+  "jupiter.real_desc": { en: "⚠ REAL MONEY: AI will swap real tokens via Jupiter DEX", ru: "⚠ РЕАЛЬНЫЕ ДЕНЬГИ: ИИ будет менять реальные токены через Jupiter DEX" },
+  "jupiter.enable": { en: "Enable Real Trading", ru: "Включить реальную торговлю" },
+  "jupiter.disable": { en: "Switch to Simulation", ru: "Переключить на симуляцию" },
+  "jupiter.confirm_title": { en: "Confirm Real Trade", ru: "Подтверди реальную сделку" },
+  "jupiter.confirm_desc": { en: "This will swap real tokens in your wallet", ru: "Это обменяет реальные токены в твоём кошельке" },
+  "jupiter.confirm_yes": { en: "Confirm Swap", ru: "Подтвердить своп" },
+  "jupiter.confirm_no": { en: "Cancel", ru: "Отмена" },
+  "jupiter.swap_success": { en: "Swap executed", ru: "Своп выполнен" },
+  "jupiter.swap_failed": { en: "Swap failed", ru: "Своп не удался" },
+  "jupiter.price_impact": { en: "Price Impact", ru: "Влияние на цену" },
+  "jupiter.route": { en: "Route", ru: "Маршрут" },
+  "jupiter.balances": { en: "Token Balances", ru: "Балансы токенов" },
+  "jupiter.no_wallet": { en: "Connect wallet to see balances", ru: "Подключи кошелёк для просмотра балансов" },
 } as const;
 
 type TranslationKey = keyof typeof translations;

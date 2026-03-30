@@ -134,6 +134,46 @@ AIDecisionLog {
 
 ---
 
+## Jupiter DEX Integration (NEW)
+
+Real token swaps on Solana via **Jupiter V6 API** — the #1 DEX aggregator.
+
+### How It Works
+
+```
+AI Decision (BUY BONK) → Jupiter Quote → Swap TX → Sign (Phantom) → On-Chain Swap
+```
+
+### Supported Tokens
+
+| Token | Mint Address |
+|-------|-------------|
+| SOL | `So11111111111111111111111111111111111111112` |
+| BTC (wBTC) | `3NZ9JMVBmGAqocybic2c7LQCJScmgsAZ6vQqTDzcqmJh` |
+| ETH (wETH) | `7vfCXTUXx5WJV5JADk17DUJ4ksgau7utNKj4b963voxs` |
+| BONK | `DezXAZ8z7PnrnRJjz3wXBoRgixCa6xjnB7YaB1pPB263` |
+| JUP | `JUPyiwrYJFskUPiHa7hkeR8VUtAeFoSYbKedZNsDvCN` |
+| RAY | `4k3Dyjzvzp8eMZWUXbBCjEvwSkkk59S5iCNLY3QrkX6R` |
+
+### Safety Features
+
+- **Simulation mode by default** — no real funds at risk until you enable it
+- **Confirmation dialog** — every real swap requires explicit user approval
+- **Max trade size** — configurable cap per trade ($50–$500)
+- **Price impact check** — rejects swaps with excessive slippage
+- **Configurable slippage** — 0.25% / 0.5% / 1% / 2%
+
+### Trade Flow
+
+1. AI analyzes market → decides BUY/SELL
+2. If wallet connected: Jupiter quote fetched
+3. If real swaps enabled: confirmation dialog shown
+4. Swap TX built, signed via Phantom, sent to Solana
+5. Trade recorded on-chain via smart contract PDA
+6. Token balances updated in real-time
+
+---
+
 ## Quick Start
 
 ### Frontend
@@ -185,6 +225,7 @@ ai-asset-manager/
 │   │   ├── technical-analysis.ts         # 9 TA indicators engine
 │   │   ├── market-data.ts               # CoinGecko real data fetcher
 │   │   ├── solana-integration.ts         # On-chain TX helpers
+│   │   ├── jupiter-swap.ts              # Jupiter DEX integration (real swaps)
 │   │   └── i18n.ts                      # EN/RU translations
 │   ├── components/
 │   │   ├── PriceChart.tsx               # TradingView-style charts
