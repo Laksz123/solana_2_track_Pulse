@@ -24,6 +24,7 @@ import {
   AlertTriangle,
   Activity,
   Loader2,
+  Settings,
 } from "lucide-react";
 import { RealMarketAsset, OHLCV, TRACKED_COINS, fetchMarketOverview, fetchOHLC, fetchPriceHistory, buildOHLCVFromPrices } from "@/lib/market-data";
 import { AITradeDecision, Portfolio, PortfolioPosition, analyzeAllAssets } from "@/lib/ai-model";
@@ -62,6 +63,13 @@ import {
   runBacktest,
 } from "@/lib/backtest";
 import { PnLTracker, PnLMetrics } from "@/lib/pnl-tracker";
+import {
+  TelegramSettings,
+  DEFAULT_TELEGRAM_SETTINGS,
+  testTelegramConnection,
+  sendTradeAlert,
+  sendPnLReport,
+} from "@/lib/telegram-bot";
 
 // ==================== CONSTANTS ====================
 
@@ -196,6 +204,41 @@ export default function Home() {
     tracker.snapshotEquity(agent.balanceUSD, agent.positions);
     setPnlMetrics(tracker.getMetrics(agent.balanceUSD, agent.positions));
   }, [agent.exists, agent.balanceUSD, agent.positions, agent.history.length]);
+
+  // Telegram
+  const [tgSettings, setTgSettings] = useState<TelegramSettings>(DEFAULT_TELEGRAM_SETTINGS);
+  const [tgTesting, setTgTesting] = useState(false);
+  const [tgAlertCount, setTgAlertCount] = useState(0);
+  const [tgLastSent, setTgLastSent] = useState<string | null>(null);
+  const [showTgSettings, setShowTgSettings] = useState(false);
+  const tgReportTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
+
+  // Periodic P&L report via Telegram
+  useEffect(() => {
+    if (tgReportTimerRef.current) clearInterval(tgReportTimerRef.current);
+    if (!tgSettings.enabled || !tgSettings.sendPnLReports || tgSettings.reportIntervalMin <= 0) return;
+    tgReportTimerRef.current = setInterval(() => {
+      const m = pnlTrackerRef.current.getMetrics(agent.balanceUSD, agent.positions);
+      sendPnLReport(tgSettings, {
+        totalPnLUSD: m.totalPnLUSD,
+        totalPnLPct: m.totalPnLPct,
+        realizedPnLUSD: m.realizedPnLUSD,
+        unrealizedPnLUSD: m.unrealizedPnLUSD,
+        winRate: m.winRate,
+        totalTrades: m.totalTrades,
+        maxDrawdown: m.maxDrawdown,
+        sharpeRatio: m.sharpeRatio,
+        profitFactor: m.profitFactor,
+        totalEquity: m.totalEquity,
+        positions: agent.positions.map((p) => ({
+          symbol: p.symbol,
+          pnlPct: p.unrealizedPnLPct,
+          amountUSD: p.amount * p.currentPrice,
+        })),
+      });
+    }, tgSettings.reportIntervalMin * 60 * 1000);
+    return () => { if (tgReportTimerRef.current) clearInterval(tgReportTimerRef.current); };
+  }, [tgSettings.enabled, tgSettings.sendPnLReports, tgSettings.reportIntervalMin, tgSettings.botToken, tgSettings.chatId, agent.balanceUSD, agent.positions]);
 
   // ==================== TOGGLE LOG ====================
 
@@ -480,6 +523,11 @@ export default function Home() {
       });
       if (!swapResult) addToast(`BUY ${topDecision.symbol}: $${fmtUSD(buyAmount)} @ $${fmtUSD(topDecision.currentPrice)}`, "success");
       pnlTrackerRef.current.recordTrade("BUY", topDecision.symbol, topDecision.coinId, buyAmount, topDecision.currentPrice);
+      sendTradeAlert(tgSettings, {
+        action: "BUY", symbol: topDecision.symbol, amountUSD: buyAmount,
+        price: topDecision.currentPrice, confidence: topDecision.confidence,
+        reasoning: topDecision.reasoning, swapMode: swapSettings.enableRealSwaps ? "real" : "simulated",
+      }).then((ok) => { if (ok) { setTgAlertCount((c) => c + 1); setTgLastSent(new Date().toLocaleTimeString()); } });
     } else if (topDecision.action === "SELL" && topDecision.amountUSD > 0) {
       const units = topDecision.amountUSD / topDecision.currentPrice;
       setAgent((p) => {
@@ -490,6 +538,11 @@ export default function Home() {
       });
       if (!swapResult) addToast(`SELL ${topDecision.symbol}: $${fmtUSD(topDecision.amountUSD)} @ $${fmtUSD(topDecision.currentPrice)}`, "success");
       pnlTrackerRef.current.recordTrade("SELL", topDecision.symbol, topDecision.coinId, topDecision.amountUSD, topDecision.currentPrice);
+      sendTradeAlert(tgSettings, {
+        action: "SELL", symbol: topDecision.symbol, amountUSD: topDecision.amountUSD,
+        price: topDecision.currentPrice, confidence: topDecision.confidence,
+        reasoning: topDecision.reasoning, swapMode: swapSettings.enableRealSwaps ? "real" : "simulated",
+      }).then((ok) => { if (ok) { setTgAlertCount((c) => c + 1); setTgLastSent(new Date().toLocaleTimeString()); } });
     } else {
       setAgent((p) => ({ ...p, history: [...p.history, hEntry] }));
     }
@@ -1497,6 +1550,124 @@ export default function Home() {
             </div>
           )}
         </div>
+      </div>
+
+      {/* TELEGRAM ALERTS */}
+      <div className="card p-4 mt-3">
+        <div className="flex items-center justify-between mb-2">
+          <div className="flex items-center gap-2">
+            <p className="text-xs text-gray-500 uppercase tracking-wide font-semibold">{t("tg.title", lang)}</p>
+            <span className={`tag text-[10px] ${tgSettings.enabled ? "bg-green-500/10 text-green-400" : "bg-gray-500/10 text-gray-500"}`}>
+              {tgSettings.enabled ? t("tg.enabled", lang) : t("tg.disabled", lang)}
+            </span>
+            {tgAlertCount > 0 && (
+              <span className="text-[10px] text-gray-600">{tgAlertCount} {t("tg.alerts_sent", lang)}</span>
+            )}
+          </div>
+          <button onClick={() => setShowTgSettings((v) => !v)}
+            className="btn-secondary px-2.5 py-1 text-[10px] flex items-center gap-1">
+            {showTgSettings ? <ChevronUp className="w-3 h-3" /> : <Settings className="w-3 h-3" />}
+            {showTgSettings ? (lang === "ru" ? "Скрыть" : "Hide") : (lang === "ru" ? "Настройки" : "Settings")}
+          </button>
+        </div>
+
+        {/* Status line */}
+        {tgSettings.enabled && tgLastSent && (
+          <p className="text-[10px] text-gray-600 mb-2">{t("tg.last_sent", lang)}: {tgLastSent}</p>
+        )}
+
+        {showTgSettings && (
+          <div className="space-y-3 mt-2">
+            <p className="text-[10px] text-gray-600">{t("tg.setup_hint", lang)}</p>
+
+            {/* Bot Token */}
+            <div>
+              <label className="text-[10px] text-gray-500 uppercase tracking-wide">{t("tg.bot_token", lang)}</label>
+              <input
+                type="password"
+                value={tgSettings.botToken}
+                onChange={(e) => setTgSettings((s) => ({ ...s, botToken: e.target.value }))}
+                placeholder="123456:ABC-DEF..."
+                className="w-full mt-1 px-2.5 py-1.5 bg-[#12141c] border border-gray-800 rounded text-xs font-mono text-gray-300 focus:border-blue-500 focus:outline-none"
+              />
+            </div>
+
+            {/* Chat ID */}
+            <div>
+              <label className="text-[10px] text-gray-500 uppercase tracking-wide">{t("tg.chat_id", lang)}</label>
+              <input
+                type="text"
+                value={tgSettings.chatId}
+                onChange={(e) => setTgSettings((s) => ({ ...s, chatId: e.target.value }))}
+                placeholder="-1001234567890"
+                className="w-full mt-1 px-2.5 py-1.5 bg-[#12141c] border border-gray-800 rounded text-xs font-mono text-gray-300 focus:border-blue-500 focus:outline-none"
+              />
+            </div>
+
+            {/* Toggles */}
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
+              {/* Enable */}
+              <button
+                onClick={() => setTgSettings((s) => ({ ...s, enabled: !s.enabled }))}
+                className={`px-2.5 py-1.5 rounded text-xs font-medium flex items-center gap-1.5 justify-center ${
+                  tgSettings.enabled ? "bg-green-500/15 text-green-400 border border-green-500/30" : "bg-[#12141c] text-gray-500 border border-gray-800"
+                }`}>
+                <div className={`w-2 h-2 rounded-full ${tgSettings.enabled ? "bg-green-400" : "bg-gray-600"}`} />
+                {tgSettings.enabled ? t("tg.enabled", lang) : t("tg.disabled", lang)}
+              </button>
+              {/* Trade Alerts */}
+              <button
+                onClick={() => setTgSettings((s) => ({ ...s, sendTradeAlerts: !s.sendTradeAlerts }))}
+                className={`px-2.5 py-1.5 rounded text-xs flex items-center gap-1.5 justify-center ${
+                  tgSettings.sendTradeAlerts ? "bg-blue-500/15 text-blue-400 border border-blue-500/30" : "bg-[#12141c] text-gray-500 border border-gray-800"
+                }`}>
+                {t("tg.trade_alerts", lang)}
+              </button>
+              {/* P&L Reports */}
+              <button
+                onClick={() => setTgSettings((s) => ({ ...s, sendPnLReports: !s.sendPnLReports }))}
+                className={`px-2.5 py-1.5 rounded text-xs flex items-center gap-1.5 justify-center ${
+                  tgSettings.sendPnLReports ? "bg-purple-500/15 text-purple-400 border border-purple-500/30" : "bg-[#12141c] text-gray-500 border border-gray-800"
+                }`}>
+                {t("tg.pnl_reports", lang)}
+              </button>
+              {/* Report Interval */}
+              <div className="flex items-center gap-1">
+                <span className="text-[10px] text-gray-500 shrink-0">{t("tg.report_interval", lang)}</span>
+                <select
+                  value={tgSettings.reportIntervalMin}
+                  onChange={(e) => setTgSettings((s) => ({ ...s, reportIntervalMin: Number(e.target.value) }))}
+                  className="bg-[#12141c] border border-gray-800 rounded px-1.5 py-1 text-xs text-gray-300 focus:outline-none">
+                  <option value={15}>15{t("tg.minutes", lang)}</option>
+                  <option value={30}>30{t("tg.minutes", lang)}</option>
+                  <option value={60}>60{t("tg.minutes", lang)}</option>
+                  <option value={0}>Off</option>
+                </select>
+              </div>
+            </div>
+
+            {/* Test button */}
+            <button
+              onClick={async () => {
+                setTgTesting(true);
+                const result = await testTelegramConnection(tgSettings.botToken, tgSettings.chatId);
+                if (result.success) {
+                  addToast(t("tg.test_ok", lang), "success");
+                } else {
+                  addToast(`${t("tg.test_fail", lang)}: ${result.error || ""}`, "error");
+                }
+                setTgTesting(false);
+              }}
+              disabled={tgTesting || !tgSettings.botToken || !tgSettings.chatId}
+              className="btn-primary px-4 py-1.5 text-xs w-full flex items-center justify-center gap-1.5 disabled:opacity-50">
+              {tgTesting ? (
+                <><Loader2 className="w-3.5 h-3.5 animate-spin" />{t("tg.testing", lang)}</>
+              ) : (
+                <>{t("tg.test", lang)}</>
+              )}
+            </button>
+          </div>
+        )}
       </div>
 
       {/* BACKTESTING SECTION */}

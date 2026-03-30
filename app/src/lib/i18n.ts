@@ -204,6 +204,25 @@ const translations = {
   "pnl.calmar": { en: "Calmar", ru: "Калмар" },
   "pnl.volatility": { en: "Volatility", ru: "Волатильность" },
   "pnl.closed_trades": { en: "Closed Trades", ru: "Закрытые сделки" },
+
+  // Telegram
+  "tg.title": { en: "Telegram Alerts", ru: "Telegram уведомления" },
+  "tg.enabled": { en: "Enabled", ru: "Включено" },
+  "tg.disabled": { en: "Disabled", ru: "Выключено" },
+  "tg.bot_token": { en: "Bot Token", ru: "Токен бота" },
+  "tg.chat_id": { en: "Chat ID", ru: "Chat ID" },
+  "tg.trade_alerts": { en: "Trade Alerts", ru: "Алерты сделок" },
+  "tg.pnl_reports": { en: "P&L Reports", ru: "P&L отчёты" },
+  "tg.report_interval": { en: "Report every", ru: "Отчёт каждые" },
+  "tg.minutes": { en: "min", ru: "мин" },
+  "tg.test": { en: "Test Connection", ru: "Тест соединения" },
+  "tg.testing": { en: "Testing...", ru: "Тестируем..." },
+  "tg.test_ok": { en: "Connected!", ru: "Подключено!" },
+  "tg.test_fail": { en: "Connection failed", ru: "Ошибка подключения" },
+  "tg.save": { en: "Save", ru: "Сохранить" },
+  "tg.setup_hint": { en: "Create bot via @BotFather, get chat ID via @userinfobot", ru: "Создай бота через @BotFather, узнай chat ID через @userinfobot" },
+  "tg.last_sent": { en: "Last alert", ru: "Последний алерт" },
+  "tg.alerts_sent": { en: "alerts sent", ru: "алертов отправлено" },
 } as const;
 
 type TranslationKey = keyof typeof translations;
