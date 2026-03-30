@@ -477,8 +477,24 @@ export default function Home() {
       totalValue: agent.balanceUSD + agent.positions.reduce((s, p) => s + p.amount * p.currentPrice, 0),
     };
 
-    // Run AI analysis on all assets
-    const decisions = analyzeAllAssets(assets, ohlcMap, portfolio, agent.strategy);
+    // Build ML signals if ensemble is trained
+    let mlSignals: Record<string, { signal: number; confidence: number; direction: "UP" | "DOWN" }> | undefined;
+    if (mlPredictorRef.current.isReady()) {
+      mlSignals = {};
+      for (const asset of assets) {
+        const candles = ohlcMap[asset.id];
+        if (candles && candles.length > 20) {
+          const mlCandles = candles.map((c) => ({ timestamp: c.time, open: c.open, high: c.high, low: c.low, close: c.close, volume: c.volume }));
+          const sig = mlPredictorRef.current.getSignal(mlCandles);
+          if (sig.confidence > 0.1) {
+            mlSignals[asset.id] = sig;
+          }
+        }
+      }
+    }
+
+    // Run AI analysis on all assets (with ML signals if available)
+    const decisions = analyzeAllAssets(assets, ohlcMap, portfolio, agent.strategy, mlSignals);
     setLastDecisions(decisions);
 
     // Execute the top decision (first actionable one)

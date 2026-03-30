@@ -106,11 +106,18 @@ function calculatePositionSize(
 
 // ==================== MAIN AI DECISION FUNCTION ====================
 
+export interface MLSignalInput {
+  signal: number;       // -1 (strong sell) to +1 (strong buy)
+  confidence: number;   // 0-1
+  direction: "UP" | "DOWN";
+}
+
 export function makeAITradeDecision(
   asset: RealMarketAsset,
   candles: OHLCV[],
   portfolio: Portfolio,
   strategy: number,
+  mlSignal?: MLSignalInput,
 ): AITradeDecision {
   const risk = STRATEGY_RISK[strategy] || STRATEGY_RISK[1];
 
@@ -227,13 +234,52 @@ export function makeAITradeDecision(
     reasoning = buildHoldReasoning(analysis, existingPos, risk);
   }
 
+  // ==================== ML SIGNAL INTEGRATION ====================
+  let finalConfidence = analysis.overallConfidence;
+  if (mlSignal && mlSignal.confidence > 0.1) {
+    const mlWeight = 0.25; // ML contributes 25% to final confidence
+    const taWeight = 1 - mlWeight;
+
+    if (action === "BUY") {
+      // ML agrees with BUY → boost confidence; disagrees → dampen
+      if (mlSignal.direction === "UP") {
+        finalConfidence = taWeight * analysis.overallConfidence + mlWeight * (0.5 + mlSignal.confidence * 0.5);
+        reasoning += ` ML ensemble confirms ↑ (${(mlSignal.confidence * 100).toFixed(0)}%).`;
+      } else {
+        finalConfidence = taWeight * analysis.overallConfidence + mlWeight * (0.5 - mlSignal.confidence * 0.3);
+        reasoning += ` ML ensemble disagrees ↓ (${(mlSignal.confidence * 100).toFixed(0)}%).`;
+        // If ML strongly disagrees and confidence drops below threshold, cancel buy
+        if (finalConfidence < risk.minConfidence && mlSignal.confidence > 0.6) {
+          action = "HOLD";
+          amountUSD = 0;
+          reasoning = `ML override: ensemble predicts DOWN (${(mlSignal.confidence * 100).toFixed(0)}%), cancelling weak BUY. ` + reasoning;
+        }
+      }
+    } else if (action === "SELL") {
+      if (mlSignal.direction === "DOWN") {
+        finalConfidence = taWeight * analysis.overallConfidence + mlWeight * (0.5 + mlSignal.confidence * 0.5);
+        reasoning += ` ML ensemble confirms ↓ (${(mlSignal.confidence * 100).toFixed(0)}%).`;
+      } else {
+        finalConfidence = taWeight * analysis.overallConfidence + mlWeight * (0.5 - mlSignal.confidence * 0.3);
+        reasoning += ` ML ensemble disagrees ↑ (${(mlSignal.confidence * 100).toFixed(0)}%).`;
+      }
+    } else if (action === "HOLD" && mlSignal.confidence > 0.65) {
+      // ML has strong opinion but TA says HOLD → add to reasoning
+      reasoning += ` ML ensemble leans ${mlSignal.direction} (${(mlSignal.confidence * 100).toFixed(0)}%).`;
+    }
+
+    if (mlSignal.confidence > 0.1) {
+      signalsSummary.push(`ML Ensemble: ${mlSignal.direction} (${(mlSignal.confidence * 100).toFixed(0)}%)`);
+    }
+  }
+
   return {
     action,
     symbol: asset.symbol,
     coinId: asset.id,
     amountUSD: Math.round(amountUSD * 100) / 100,
     currentPrice: asset.currentPrice,
-    confidence: analysis.overallConfidence,
+    confidence: finalConfidence,
     reasoning,
     analysis,
     riskLevel,
@@ -319,6 +365,7 @@ export function analyzeAllAssets(
   candlesMap: Record<string, OHLCV[]>,
   portfolio: Portfolio,
   strategy: number,
+  mlSignals?: Record<string, MLSignalInput>,
 ): AITradeDecision[] {
   const decisions: AITradeDecision[] = [];
 
@@ -326,7 +373,8 @@ export function analyzeAllAssets(
     const candles = candlesMap[asset.id];
     if (!candles || candles.length < 20) continue;
 
-    const decision = makeAITradeDecision(asset, candles, portfolio, strategy);
+    const mlSig = mlSignals?.[asset.id];
+    const decision = makeAITradeDecision(asset, candles, portfolio, strategy, mlSig);
     decisions.push(decision);
   }
 

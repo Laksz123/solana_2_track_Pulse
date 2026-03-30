@@ -250,6 +250,14 @@ const translations = {
   "ml.config": { en: "Config", ru: "Настройки" },
   "ml.ready": { en: "Ready", ru: "Готово" },
   "ml.progress": { en: "Progress", ru: "Прогресс" },
+  "ml.ensemble": { en: "Ensemble", ru: "Ансамбль" },
+  "ml.ensemble_acc": { en: "Ensemble Acc", ru: "Точность ансамбля" },
+  "ml.nn": { en: "Neural Net", ru: "Нейросеть" },
+  "ml.momentum": { en: "Momentum", ru: "Моментум" },
+  "ml.mean_rev": { en: "Mean Rev", ru: "Реверсия" },
+  "ml.trend": { en: "Trend", ru: "Тренд" },
+  "ml.weight": { en: "Weight", ru: "Вес" },
+  "ml.integrated": { en: "ML integrated into AI decisions", ru: "ML интегрирован в AI решения" },
 } as const;
 
 type TranslationKey = keyof typeof translations;
