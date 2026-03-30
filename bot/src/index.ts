@@ -9,6 +9,7 @@ import { CONFIG, getStrategyProfile, log } from "./config";
 import { fetchMarketOverview, fetchOHLC, fetchPriceHistory, buildOHLCVFromPrices, OHLCV, MarketAsset } from "./market-data";
 import { analyzeCandles, FullAnalysis } from "./technical-analysis";
 import { sendTradeAlert, sendPnLReport, sendBotStarted, sendBotError, PnLSummary } from "./telegram";
+import { TelegramCommandBot, BotControl } from "./telegram-commands";
 
 // ==================== TYPES ====================
 
@@ -572,6 +573,25 @@ async function main(): Promise<void> {
     log.info("Solana connection established");
   }
 
+  // ==================== TELEGRAM COMMAND BOT ====================
+  // Set up bot control for Telegram commands
+  const botControl: BotControl = {
+    tradingEnabled: true,
+    strategy: CONFIG.strategy,
+    getState: () => state,
+    onStrategyChange: (newStrategy) => {
+      CONFIG.strategy = newStrategy;
+      log.info(`Strategy changed via Telegram: ${getStrategyProfile().name}`);
+    },
+    onTradingToggle: (enabled) => {
+      log.info(`Trading ${enabled ? "enabled" : "disabled"} via Telegram`);
+    },
+  };
+
+  // Start Telegram command bot (runs in background)
+  const tgBot = new TelegramCommandBot(botControl);
+  tgBot.start(); // non-blocking, runs polling loop
+
   // Send Telegram start notification
   await sendBotStarted();
 
@@ -583,6 +603,7 @@ async function main(): Promise<void> {
   const shutdown = () => {
     log.info("Shutting down...");
     running = false;
+    tgBot.stop();
     saveState(state);
     process.exit(0);
   };
@@ -594,7 +615,12 @@ async function main(): Promise<void> {
 
   while (running) {
     try {
-      await runCycle(state, connection, keypair);
+      // Check if trading is enabled via Telegram control
+      if (botControl.tradingEnabled) {
+        await runCycle(state, connection, keypair);
+      } else {
+        log.debug("Trading paused via Telegram — skipping cycle");
+      }
 
       // Send periodic P&L report
       if (CONFIG.telegramEnabled && CONFIG.telegramReportMin > 0) {
