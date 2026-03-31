@@ -751,54 +751,82 @@ export default function Home() {
       t("strategy.aggressive.desc", lang),
     ];
     const strategyIcons = [ShieldCheck, Crosshair, Zap];
+    const strategyColors = [
+      { gradient: "from-blue-500/20 to-cyan-500/20", text: "text-blue-400", glow: "shadow-blue-500/10" },
+      { gradient: "from-amber-500/20 to-orange-500/20", text: "text-amber-400", glow: "shadow-amber-500/10" },
+      { gradient: "from-red-500/20 to-pink-500/20", text: "text-red-400", glow: "shadow-red-500/10" },
+    ];
 
     return (
-      <div className="min-h-screen flex flex-col items-center justify-center gap-6 p-4">
-        <div className="absolute top-4 right-4"><LangToggle lang={lang} setLang={setLang} /></div>
+      <div className="hero-gradient min-h-screen flex flex-col items-center justify-center gap-8 p-6 relative overflow-hidden">
+        <div className="absolute top-6 right-6 z-10"><LangToggle lang={lang} setLang={setLang} /></div>
 
-        <div className="text-center space-y-2">
-          <h1 className="text-3xl font-bold text-white tracking-tight">{t("app.title", lang)}</h1>
-          <p className="text-sm text-gray-500">{t("app.subtitle", lang)}</p>
-          <div className="flex items-center justify-center gap-2 mt-1">
-            <Activity className="w-4 h-4 text-green-400" />
-            <span className="text-xs text-green-400 font-medium">
-              {t("data.live_coingecko", lang)}
-            </span>
+        {/* Hero */}
+        <div className="text-center space-y-3 animate-fade-in">
+          <div className="inline-flex items-center gap-2 px-4 py-1.5 rounded-full bg-emerald-500/10 border border-emerald-500/20 mb-4">
+            <div className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
+            <span className="text-xs font-semibold text-emerald-400 tracking-wide">{t("data.live_coingecko", lang)}</span>
+          </div>
+          <h1 className="text-4xl md:text-5xl font-extrabold text-white tracking-tight leading-tight">
+            {t("app.title", lang)}
+          </h1>
+          <p className="text-base text-[#6b7280] max-w-md mx-auto leading-relaxed">{t("app.subtitle", lang)}</p>
+        </div>
+
+        {/* Strategy picker */}
+        <div className="w-full max-w-3xl animate-slide-up">
+          <div className="text-center mb-6">
+            <h2 className="text-lg font-bold text-white/90">{t("strategy.title", lang)}</h2>
+            <p className="text-sm text-[#6b7280] mt-1">{t("strategy.desc", lang)}</p>
+          </div>
+
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+            {[0, 1, 2].map((i) => {
+              const Icon = strategyIcons[i];
+              const active = selectedStrategy === i;
+              const colors = strategyColors[i];
+              return (
+                <button key={i} onClick={() => setSelectedStrategy(i)}
+                  className={`strategy-card group ${active ? "active" : ""}`}>
+                  <div className={`w-14 h-14 mx-auto mb-4 rounded-2xl bg-gradient-to-br ${colors.gradient} flex items-center justify-center transition-transform duration-300 group-hover:scale-110 ${active ? "animate-float" : ""}`}>
+                    <Icon className={`w-7 h-7 ${active ? colors.text : "text-[#6b7280]"} transition-colors`} />
+                  </div>
+                  <h3 className={`font-bold text-base mb-2 transition-colors ${active ? "text-white" : "text-[#9ca3af]"}`}>
+                    {getStrategyName(i, lang)}
+                  </h3>
+                  <p className="text-xs text-[#6b7280] leading-relaxed">{strategyDescs[i]}</p>
+                  {active && (
+                    <div className="mt-3 inline-flex items-center gap-1 text-emerald-400 text-xs font-semibold">
+                      <CheckCircle2 className="w-3.5 h-3.5" /> {lang === "ru" ? "Выбрано" : "Selected"}
+                    </div>
+                  )}
+                </button>
+              );
+            })}
           </div>
         </div>
 
-        <h2 className="text-lg text-gray-300 font-medium mt-4">{t("strategy.title", lang)}</h2>
-        <p className="text-sm text-gray-500 -mt-4">{t("strategy.desc", lang)}</p>
-
-        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 max-w-2xl w-full">
-          {[0, 1, 2].map((i) => {
-            const Icon = strategyIcons[i];
-            const active = selectedStrategy === i;
-            return (
-              <button key={i} onClick={() => setSelectedStrategy(i)}
-                className={`card-hover p-5 text-center transition-all ${active ? "!border-green-500 bg-green-500/5" : ""}`}>
-                <Icon className={`w-8 h-8 mx-auto mb-2 ${active ? "text-green-400" : "text-gray-600"}`} />
-                <h3 className={`font-semibold text-sm ${active ? "text-white" : "text-gray-400"}`}>{getStrategyName(i, lang)}</h3>
-                <p className="text-xs text-gray-600 mt-1">{strategyDescs[i]}</p>
-              </button>
-            );
-          })}
-        </div>
-
-        <button onClick={createAgent} disabled={isProcessing} className="btn-primary px-8 py-2.5 text-sm mt-2">
-          {isProcessing ? t("strategy.creating", lang) : t("strategy.create", lang)}
+        {/* CTA */}
+        <button onClick={createAgent} disabled={isProcessing}
+          className="btn-primary px-10 py-3.5 text-base font-bold tracking-wide animate-slide-up animate-glow-pulse rounded-xl">
+          {isProcessing ? (
+            <span className="flex items-center gap-2"><Loader2 className="w-5 h-5 animate-spin" />{t("strategy.creating", lang)}</span>
+          ) : t("strategy.create", lang)}
         </button>
 
-        <div className="flex gap-6 mt-8 text-center">
+        {/* Features */}
+        <div className="flex gap-8 mt-6 animate-fade-in">
           {[
             { icon: BarChart3, title: t("feature.ai", lang), desc: t("feature.ai.desc", lang) },
             { icon: Activity, title: t("feature.ta", lang), desc: t("feature.ta.desc", lang) },
             { icon: ShieldCheck, title: t("feature.control", lang), desc: t("feature.control.desc", lang) },
           ].map((f, i) => (
-            <div key={i} className="flex-1 max-w-[160px]">
-              <f.icon className="w-5 h-5 mx-auto mb-1.5 text-gray-600" />
-              <p className="text-xs font-medium text-gray-400">{f.title}</p>
-              <p className="text-[10px] text-gray-600 mt-0.5">{f.desc}</p>
+            <div key={i} className="flex-1 max-w-[180px] text-center">
+              <div className="w-10 h-10 mx-auto mb-2 rounded-xl bg-white/[0.03] border border-white/[0.06] flex items-center justify-center">
+                <f.icon className="w-5 h-5 text-[#6b7280]" />
+              </div>
+              <p className="text-xs font-semibold text-[#9ca3af]">{f.title}</p>
+              <p className="text-[11px] text-[#6b7280] mt-1 leading-relaxed">{f.desc}</p>
             </div>
           ))}
         </div>
@@ -814,27 +842,30 @@ export default function Home() {
   // ==================== DASHBOARD ====================
 
   return (
-    <div className={`min-h-screen p-3 md:p-5 max-w-[1400px] mx-auto relative ${isTelegram ? "tg-viewport tg-app tg-safe-top tg-bottom-pad" : ""}`}>
+    <div className={`min-h-screen p-4 md:p-6 max-w-[1440px] mx-auto relative ${isTelegram ? "tg-viewport tg-app tg-safe-top tg-bottom-pad" : ""}`}>
       {/* Telegram Mini App Header */}
       {isTelegram && tgUser && (
-        <div className="flex items-center justify-between mb-3 px-1">
-          <div className="flex items-center gap-2">
-            <div className="w-8 h-8 rounded-full bg-gradient-to-br from-blue-500 to-purple-600 flex items-center justify-center text-white text-xs font-bold">
+        <div className="flex items-center justify-between mb-4 px-1">
+          <div className="flex items-center gap-3">
+            <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-blue-500 to-purple-600 flex items-center justify-center text-white text-sm font-bold shadow-lg shadow-purple-500/20">
               {tgUser.first_name?.[0] || "U"}
             </div>
             <div>
-              <p className="text-xs font-medium text-gray-200">{tgUser.first_name} {tgUser.last_name || ""}</p>
-              <p className="text-[10px] text-gray-500">@{tgUser.username || "user"} • {tgPlatform}</p>
+              <p className="text-sm font-semibold text-white">{tgUser.first_name} {tgUser.last_name || ""}</p>
+              <p className="text-[11px] text-[#6b7280]">@{tgUser.username || "user"} • {tgPlatform}</p>
             </div>
           </div>
           <div className="flex items-center gap-2">
             <LangToggle lang={lang} setLang={setLang} />
             {connected ? (
-              <span className="tag bg-green-500/10 text-green-400 text-[10px]">🔗 {publicKey?.toBase58().slice(0, 4)}...{publicKey?.toBase58().slice(-4)}</span>
+              <span className="tag bg-emerald-500/10 text-emerald-400 text-[10px] border border-emerald-500/20">
+                <div className="w-1.5 h-1.5 rounded-full bg-emerald-400" />
+                {publicKey?.toBase58().slice(0, 4)}...{publicKey?.toBase58().slice(-4)}
+              </span>
             ) : (
               <button onClick={() => { haptic?.impactOccurred("medium"); setWalletModalVisible(true); }}
-                className="btn-primary px-3 py-1.5 text-[10px] flex items-center gap-1">
-                <Wallet className="w-3 h-3" /> {t("tg.connect_wallet", lang)}
+                className="btn-primary px-4 py-2 text-xs flex items-center gap-1.5">
+                <Wallet className="w-3.5 h-3.5" /> {t("tg.connect_wallet", lang)}
               </button>
             )}
           </div>
@@ -843,27 +874,23 @@ export default function Home() {
 
       {/* Toast notifications */}
       {toasts.length > 0 && (
-        <div className="fixed top-4 right-4 z-50 flex flex-col gap-2 max-w-sm">
+        <div className="fixed top-5 right-5 z-50 flex flex-col gap-2.5 max-w-sm">
           {toasts.map((toast) => (
             <div key={toast.id}
-              className={`flex items-start gap-2.5 px-4 py-3 rounded-lg shadow-lg border animate-slide-in ${
-                toast.type === "success" ? "bg-green-950/90 border-green-800/50" :
-                toast.type === "error" ? "bg-red-950/90 border-red-800/50" :
-                "bg-blue-950/90 border-blue-800/50"
+              className={`flex items-start gap-3 px-4 py-3.5 rounded-xl border animate-slide-in backdrop-blur-xl ${
+                toast.type === "success" ? "bg-emerald-950/80 border-emerald-500/20 shadow-lg shadow-emerald-500/10" :
+                toast.type === "error" ? "bg-red-950/80 border-red-500/20 shadow-lg shadow-red-500/10" :
+                "bg-blue-950/80 border-blue-500/20 shadow-lg shadow-blue-500/10"
               }`}>
-              {toast.type === "success" ? <CheckCircle2 className="w-4 h-4 text-green-400 shrink-0 mt-0.5" /> :
+              {toast.type === "success" ? <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0 mt-0.5" /> :
                toast.type === "error" ? <AlertTriangle className="w-4 h-4 text-red-400 shrink-0 mt-0.5" /> :
                <Info className="w-4 h-4 text-blue-400 shrink-0 mt-0.5" />}
-              <p className={`text-sm flex-1 ${
-                toast.type === "success" ? "text-green-200" :
+              <p className={`text-sm flex-1 font-medium ${
+                toast.type === "success" ? "text-emerald-200" :
                 toast.type === "error" ? "text-red-200" : "text-blue-200"
               }`}>{toast.msg}</p>
-              <button onClick={() => dismissToast(toast.id)} className="shrink-0 mt-0.5">
-                <X className={`w-3.5 h-3.5 ${
-                  toast.type === "success" ? "text-green-600 hover:text-green-400" :
-                  toast.type === "error" ? "text-red-600 hover:text-red-400" :
-                  "text-blue-600 hover:text-blue-400"
-                }`} />
+              <button onClick={() => dismissToast(toast.id)} className="shrink-0 mt-0.5 opacity-40 hover:opacity-100 transition-opacity">
+                <X className="w-3.5 h-3.5 text-white" />
               </button>
             </div>
           ))}
@@ -872,42 +899,46 @@ export default function Home() {
 
       {/* Swap Confirmation Modal */}
       {pendingSwap && (
-        <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/60 backdrop-blur-sm">
-          <div className="card p-6 max-w-sm w-full mx-4 border-yellow-500/30">
-            <div className="flex items-center gap-2 mb-3">
-              <AlertTriangle className="w-5 h-5 text-yellow-400" />
-              <h3 className="text-sm font-bold text-white">{t("jupiter.confirm_title", lang)}</h3>
+        <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/70 backdrop-blur-md animate-fade-in">
+          <div className="card p-6 max-w-sm w-full mx-4 border-amber-500/20 shadow-2xl shadow-amber-500/5 animate-slide-up">
+            <div className="flex items-center gap-2.5 mb-4">
+              <div className="w-9 h-9 rounded-xl bg-amber-500/10 flex items-center justify-center">
+                <AlertTriangle className="w-5 h-5 text-amber-400" />
+              </div>
+              <div>
+                <h3 className="text-sm font-bold text-white">{t("jupiter.confirm_title", lang)}</h3>
+                <p className="text-[11px] text-[#6b7280]">{t("jupiter.confirm_desc", lang)}</p>
+              </div>
             </div>
-            <p className="text-xs text-gray-400 mb-4">{t("jupiter.confirm_desc", lang)}</p>
-            <div className="bg-[#12141c] rounded-lg p-3 mb-4 space-y-1.5">
+            <div className="rounded-xl bg-[#0c0e16] p-4 mb-5 space-y-2.5 border border-white/[0.04]">
               <div className="flex justify-between text-xs">
-                <span className="text-gray-500">Action</span>
-                <span className={pendingSwap.decision.action === "BUY" ? "text-green-400 font-bold" : "text-red-400 font-bold"}>
+                <span className="text-[#6b7280]">Action</span>
+                <span className={`font-bold ${pendingSwap.decision.action === "BUY" ? "text-emerald-400" : "text-red-400"}`}>
                   {pendingSwap.decision.action} {pendingSwap.decision.symbol}
                 </span>
               </div>
               <div className="flex justify-between text-xs">
-                <span className="text-gray-500">Amount</span>
-                <span className="text-white font-mono">${fmtUSD(pendingSwap.decision.amountUSD)}</span>
+                <span className="text-[#6b7280]">Amount</span>
+                <span className="text-white stat-value">${fmtUSD(pendingSwap.decision.amountUSD)}</span>
               </div>
               <div className="flex justify-between text-xs">
-                <span className="text-gray-500">Price</span>
-                <span className="text-gray-300 font-mono">${fmtUSD(pendingSwap.decision.currentPrice)}</span>
+                <span className="text-[#6b7280]">Price</span>
+                <span className="text-[#9ca3af] stat-value">${fmtUSD(pendingSwap.decision.currentPrice)}</span>
               </div>
               <div className="flex justify-between text-xs">
-                <span className="text-gray-500">Confidence</span>
-                <span className="text-gray-300">{Math.round(pendingSwap.decision.confidence * 100)}%</span>
+                <span className="text-[#6b7280]">Confidence</span>
+                <span className="text-[#9ca3af]">{Math.round(pendingSwap.decision.confidence * 100)}%</span>
               </div>
               <div className="flex justify-between text-xs">
-                <span className="text-gray-500">Slippage</span>
-                <span className="text-gray-300">{(swapSettings.slippageBps / 100).toFixed(1)}%</span>
+                <span className="text-[#6b7280]">Slippage</span>
+                <span className="text-[#9ca3af]">{(swapSettings.slippageBps / 100).toFixed(1)}%</span>
               </div>
             </div>
-            <div className="flex gap-2">
+            <div className="flex gap-3">
               <button onClick={() => pendingSwap.resolve(false)}
-                className="btn-secondary flex-1 py-2 text-xs">{t("jupiter.confirm_no", lang)}</button>
+                className="btn-secondary flex-1 py-2.5 text-xs">{t("jupiter.confirm_no", lang)}</button>
               <button onClick={() => pendingSwap.resolve(true)}
-                className="btn-primary flex-1 py-2 text-xs">{t("jupiter.confirm_yes", lang)}</button>
+                className="btn-primary flex-1 py-2.5 text-xs">{t("jupiter.confirm_yes", lang)}</button>
             </div>
           </div>
         </div>
@@ -915,83 +946,81 @@ export default function Home() {
 
       {/* Jupiter Swap Settings Overlay */}
       {showSwapSettings && (
-        <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/60 backdrop-blur-sm">
-          <div className="card p-6 max-w-md w-full mx-4">
-            <div className="flex items-center justify-between mb-4">
+        <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/70 backdrop-blur-md animate-fade-in">
+          <div className="card p-6 max-w-md w-full mx-4 animate-slide-up">
+            <div className="flex items-center justify-between mb-5">
               <h3 className="text-sm font-bold text-white">{t("jupiter.settings", lang)}</h3>
-              <button onClick={() => setShowSwapSettings(false)}><X className="w-4 h-4 text-gray-500 hover:text-white" /></button>
+              <button onClick={() => setShowSwapSettings(false)} className="w-8 h-8 rounded-lg bg-white/[0.04] flex items-center justify-center hover:bg-white/[0.08] transition-colors">
+                <X className="w-4 h-4 text-[#6b7280]" />
+              </button>
             </div>
 
             {/* Real Swaps Toggle */}
-            <div className={`rounded-lg p-3 mb-4 border ${swapSettings.enableRealSwaps ? "bg-red-950/30 border-red-500/30" : "bg-[#12141c] border-gray-800/50"}`}>
+            <div className={`rounded-xl p-4 mb-5 border transition-all ${swapSettings.enableRealSwaps ? "bg-red-500/5 border-red-500/20" : "bg-[#0c0e16] border-white/[0.04]"}`}>
               <div className="flex items-center justify-between mb-2">
-                <span className="text-xs font-semibold text-gray-300">{t("jupiter.real_swaps", lang)}</span>
+                <span className="text-xs font-semibold text-[#e5e7eb]">{t("jupiter.real_swaps", lang)}</span>
                 <button
                   onClick={() => setSwapSettings((s) => ({ ...s, enableRealSwaps: !s.enableRealSwaps }))}
-                  className={`relative w-10 h-5 rounded-full transition-colors ${swapSettings.enableRealSwaps ? "bg-red-500" : "bg-gray-700"}`}>
-                  <div className={`absolute top-0.5 w-4 h-4 rounded-full bg-white transition-transform ${swapSettings.enableRealSwaps ? "translate-x-5" : "translate-x-0.5"}`} />
+                  className={`toggle-switch ${swapSettings.enableRealSwaps ? "bg-red-500" : "bg-[#2a2d3a]"}`}>
+                  <div className={`toggle-thumb ${swapSettings.enableRealSwaps ? "translate-x-[18px]" : "translate-x-[2px]"}`} />
                 </button>
               </div>
-              <p className="text-[10px] text-gray-500">
+              <p className="text-[11px] text-[#6b7280]">
                 {swapSettings.enableRealSwaps ? t("jupiter.real_desc", lang) : t("jupiter.sim_desc", lang)}
               </p>
             </div>
 
-            {/* Slippage */}
-            <div className="space-y-3">
+            <div className="space-y-4">
               <div>
-                <label className="text-[10px] text-gray-500 uppercase tracking-wide">{t("jupiter.slippage", lang)}</label>
-                <div className="flex gap-1.5 mt-1">
+                <label className="section-label">{t("jupiter.slippage", lang)}</label>
+                <div className="flex gap-2 mt-2">
                   {[25, 50, 100, 200].map((bps) => (
                     <button key={bps}
                       onClick={() => setSwapSettings((s) => ({ ...s, slippageBps: bps }))}
-                      className={`px-2.5 py-1 rounded text-xs font-mono ${swapSettings.slippageBps === bps ? "bg-green-500/20 text-green-400 border border-green-500/30" : "bg-[#12141c] text-gray-500 hover:text-gray-300"}`}>
+                      className={`flex-1 px-3 py-2 rounded-lg text-xs stat-value transition-all ${swapSettings.slippageBps === bps ? "bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 shadow-sm shadow-emerald-500/10" : "bg-[#0c0e16] text-[#6b7280] border border-transparent hover:border-white/[0.06]"}`}>
                       {(bps / 100).toFixed(1)}%
                     </button>
                   ))}
                 </div>
               </div>
 
-              {/* Max Price Impact */}
               <div>
-                <label className="text-[10px] text-gray-500 uppercase tracking-wide">{t("jupiter.max_impact", lang)}</label>
-                <div className="flex gap-1.5 mt-1">
+                <label className="section-label">{t("jupiter.max_impact", lang)}</label>
+                <div className="flex gap-2 mt-2">
                   {[0.5, 1.0, 2.0, 5.0].map((pct) => (
                     <button key={pct}
                       onClick={() => setSwapSettings((s) => ({ ...s, maxPriceImpactPct: pct }))}
-                      className={`px-2.5 py-1 rounded text-xs font-mono ${swapSettings.maxPriceImpactPct === pct ? "bg-green-500/20 text-green-400 border border-green-500/30" : "bg-[#12141c] text-gray-500 hover:text-gray-300"}`}>
+                      className={`flex-1 px-3 py-2 rounded-lg text-xs stat-value transition-all ${swapSettings.maxPriceImpactPct === pct ? "bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 shadow-sm shadow-emerald-500/10" : "bg-[#0c0e16] text-[#6b7280] border border-transparent hover:border-white/[0.06]"}`}>
                       {pct}%
                     </button>
                   ))}
                 </div>
               </div>
 
-              {/* Max Trade Size */}
               <div>
-                <label className="text-[10px] text-gray-500 uppercase tracking-wide">{t("jupiter.max_trade", lang)}</label>
-                <div className="flex gap-1.5 mt-1">
+                <label className="section-label">{t("jupiter.max_trade", lang)}</label>
+                <div className="flex gap-2 mt-2">
                   {[50, 100, 250, 500].map((usd) => (
                     <button key={usd}
                       onClick={() => setSwapSettings((s) => ({ ...s, maxTradeUSD: usd }))}
-                      className={`px-2.5 py-1 rounded text-xs font-mono ${swapSettings.maxTradeUSD === usd ? "bg-green-500/20 text-green-400 border border-green-500/30" : "bg-[#12141c] text-gray-500 hover:text-gray-300"}`}>
+                      className={`flex-1 px-3 py-2 rounded-lg text-xs stat-value transition-all ${swapSettings.maxTradeUSD === usd ? "bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 shadow-sm shadow-emerald-500/10" : "bg-[#0c0e16] text-[#6b7280] border border-transparent hover:border-white/[0.06]"}`}>
                       ${usd}
                     </button>
                   ))}
                 </div>
               </div>
 
-              {/* Confirm Before Swap */}
-              <div className="flex items-center justify-between">
-                <span className="text-xs text-gray-400">{lang === "ru" ? "Подтверждение перед свопом" : "Confirm before swap"}</span>
+              <div className="flex items-center justify-between py-1">
+                <span className="text-xs text-[#9ca3af]">{lang === "ru" ? "Подтверждение перед свопом" : "Confirm before swap"}</span>
                 <button
                   onClick={() => setSwapSettings((s) => ({ ...s, confirmBeforeSwap: !s.confirmBeforeSwap }))}
-                  className={`relative w-10 h-5 rounded-full transition-colors ${swapSettings.confirmBeforeSwap ? "bg-green-500" : "bg-gray-700"}`}>
-                  <div className={`absolute top-0.5 w-4 h-4 rounded-full bg-white transition-transform ${swapSettings.confirmBeforeSwap ? "translate-x-5" : "translate-x-0.5"}`} />
+                  className={`toggle-switch ${swapSettings.confirmBeforeSwap ? "bg-emerald-500" : "bg-[#2a2d3a]"}`}>
+                  <div className={`toggle-thumb ${swapSettings.confirmBeforeSwap ? "translate-x-[18px]" : "translate-x-[2px]"}`} />
                 </button>
               </div>
             </div>
 
-            <button onClick={() => setShowSwapSettings(false)} className="btn-primary w-full py-2 text-xs mt-4">
+            <button onClick={() => setShowSwapSettings(false)} className="btn-primary w-full py-2.5 text-sm mt-5">
               {lang === "ru" ? "Сохранить" : "Save"}
             </button>
           </div>
@@ -999,118 +1028,144 @@ export default function Home() {
       )}
 
       {/* Header */}
-      <header className="flex items-center justify-between gap-3 mb-5">
-        <div className="flex items-center gap-2.5">
-          <h1 className="text-lg font-bold text-white">{t("app.title", lang)}</h1>
-          <div className="flex items-center gap-0.5 bg-[#12141c] rounded-lg p-0.5">
+      <header className="flex items-center justify-between gap-4 mb-6">
+        <div className="flex items-center gap-3">
+          <h1 className="text-xl font-extrabold text-white tracking-tight">{t("app.title", lang)}</h1>
+          <div className="flex items-center gap-1 bg-[#0c0e16] rounded-xl p-1 border border-white/[0.04]">
             {[0, 1, 2].map((s) => {
               const active = agent.strategy === s;
-              const colors = s === 0 ? "bg-blue-500/20 text-blue-400" : s === 1 ? "bg-yellow-500/20 text-yellow-400" : "bg-red-500/20 text-red-400";
+              const colors = s === 0 ? "bg-blue-500/15 text-blue-400 shadow-blue-500/10" : s === 1 ? "bg-amber-500/15 text-amber-400 shadow-amber-500/10" : "bg-red-500/15 text-red-400 shadow-red-500/10";
               return (
                 <button key={s} onClick={() => setAgent((p) => ({ ...p, strategy: s }))}
-                  className={`px-2 py-1 text-[10px] font-semibold rounded-md transition-all ${active ? colors : "text-gray-600 hover:text-gray-400"}`}>
+                  className={`px-3 py-1.5 text-[11px] font-bold rounded-lg transition-all ${active ? `${colors} shadow-sm` : "text-[#4b5563] hover:text-[#9ca3af]"}`}>
                   {getStrategyName(s, lang)}
                 </button>
               );
             })}
           </div>
-          <span className="tag bg-blue-500/10 text-blue-400 flex items-center gap-1">
-            <Activity className="w-3 h-3" />
-            {t("data.live_badge", lang)}
-          </span>
+          <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-blue-500/8 border border-blue-500/15">
+            <div className="w-1.5 h-1.5 rounded-full bg-blue-400 animate-pulse" />
+            <span className="text-[11px] font-semibold text-blue-400">{t("data.live_badge", lang)}</span>
+          </div>
+          {wsConnected && (
+            <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-emerald-500/8 border border-emerald-500/15">
+              <div className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
+              <span className="text-[11px] font-semibold text-emerald-400">WebSocket</span>
+            </div>
+          )}
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2.5">
           {connected && publicKey ? (
-            <div className="card px-3 py-1.5 flex items-center gap-2 text-xs">
-              <div className="w-2 h-2 rounded-full bg-green-400 animate-pulse" />
-              <span className="font-mono text-green-400">{publicKey.toBase58().slice(0, 4)}...{publicKey.toBase58().slice(-4)}</span>
-              {solBalance !== null && <span className="text-gray-500">{solBalance.toFixed(2)} SOL</span>}
+            <div className="flex items-center gap-2.5 px-4 py-2 rounded-xl bg-[#0c0e16] border border-white/[0.04]">
+              <div className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
+              <span className="stat-value text-xs text-emerald-400">{publicKey.toBase58().slice(0, 4)}...{publicKey.toBase58().slice(-4)}</span>
+              {solBalance !== null && <span className="text-[11px] text-[#6b7280] stat-value">{solBalance.toFixed(2)} SOL</span>}
               <a href={getExplorerAccountUrl(publicKey.toBase58())} target="_blank" rel="noopener noreferrer"
-                className="text-blue-400 hover:text-blue-300 text-[10px] underline">Explorer</a>
+                className="text-[10px] text-blue-400 hover:text-blue-300 font-medium">Explorer</a>
             </div>
           ) : (
             <button onClick={() => setWalletModalVisible(true)}
-              className="btn-secondary px-3 py-1.5 text-xs flex items-center gap-1.5">
+              className="btn-secondary px-4 py-2 text-xs flex items-center gap-2">
               <Wallet className="w-3.5 h-3.5" />
               Connect Wallet
             </button>
           )}
-          <div className="card px-3 py-1.5 flex items-center gap-2 text-xs">
-            <Wallet className="w-3.5 h-3.5 text-gray-500" />
-            <span className="font-mono text-gray-300">${fmtUSD(walletBalance)}</span>
-            <span className="text-gray-600">({t("app.demo", lang)})</span>
+          <div className="flex items-center gap-2.5 px-4 py-2 rounded-xl bg-[#0c0e16] border border-white/[0.04]">
+            <Wallet className="w-3.5 h-3.5 text-[#4b5563]" />
+            <span className="stat-value text-xs text-[#e5e7eb]">${fmtUSD(walletBalance)}</span>
+            <span className="text-[10px] text-[#4b5563] font-medium">({t("app.demo", lang)})</span>
           </div>
           <LangToggle lang={lang} setLang={setLang} />
         </div>
       </header>
 
-      <div className="grid grid-cols-1 lg:grid-cols-12 gap-3">
+      <div className="grid grid-cols-1 lg:grid-cols-12 gap-4">
 
         {/* LEFT — Balance + Controls + Positions */}
-        <div className="lg:col-span-3 space-y-3">
-          {/* Balance */}
-          <div className="card p-4">
-            <p className="text-xs text-gray-500 uppercase tracking-wide mb-1">{t("dash.balance", lang)}</p>
-            <p className="text-2xl font-bold text-white font-mono">${fmtUSD(agent.balanceUSD)}</p>
-            <div className="flex justify-between mt-2 text-[11px]">
-              <span className="text-gray-600">{t("dash.portfolio", lang)}</span>
-              <span className="font-mono text-gray-400">${fmtUSD(totalValue)}</span>
+        <div className="lg:col-span-3 space-y-4">
+          {/* Balance Card */}
+          <div className="card p-5 relative overflow-hidden">
+            <div className="absolute top-0 right-0 w-32 h-32 bg-gradient-to-bl from-emerald-500/5 to-transparent rounded-bl-full pointer-events-none" />
+            <p className="section-label mb-2">{t("dash.balance", lang)}</p>
+            <p className="text-3xl font-extrabold text-white stat-value tracking-tight animate-count-up">${fmtUSD(agent.balanceUSD)}</p>
+            <div className="mt-3 space-y-1.5">
+              <div className="flex justify-between text-xs">
+                <span className="text-[#6b7280]">{t("dash.portfolio", lang)}</span>
+                <span className="stat-value text-[#e5e7eb] font-semibold">${fmtUSD(totalValue)}</span>
+              </div>
+              {totalPosValue > 0 && (
+                <div className="flex justify-between text-xs">
+                  <span className="text-[#6b7280]">{t("dash.in_positions", lang)}</span>
+                  <span className="stat-value text-emerald-400 font-semibold">${fmtUSD(totalPosValue)}</span>
+                </div>
+              )}
             </div>
-            {totalPosValue > 0 && (
-              <div className="flex justify-between text-[11px]">
-                <span className="text-gray-600">{t("dash.in_positions", lang)}</span>
-                <span className="font-mono text-gray-400">${fmtUSD(totalPosValue)}</span>
+            {/* Mini allocation bar */}
+            {totalValue > 0 && (
+              <div className="mt-3">
+                <div className="h-1.5 rounded-full bg-[#0c0e16] overflow-hidden flex">
+                  <div className="h-full bg-gradient-to-r from-blue-500 to-blue-400 transition-all duration-500" style={{ width: `${((agent.balanceUSD / totalValue) * 100)}%` }} />
+                  <div className="h-full bg-gradient-to-r from-emerald-500 to-emerald-400 transition-all duration-500" style={{ width: `${((totalPosValue / totalValue) * 100)}%` }} />
+                </div>
               </div>
             )}
           </div>
 
-          {/* Deposit */}
-          <div className="card p-4">
-            <p className="text-xs text-gray-500 uppercase tracking-wide mb-2">{t("dash.deposit", lang)}</p>
-            <div className="flex gap-2">
-              <input type="number" step="50" value={depositAmount}
-                onChange={(e) => setDepositAmount(e.target.value)}
-                className="input-field flex-1 text-sm" placeholder="USD" />
-              <button onClick={handleDeposit} disabled={isProcessing}
-                className="btn-primary px-3 py-2 text-xs flex items-center gap-1">
-                <ArrowDown className="w-3.5 h-3.5" />{t("dash.deposit", lang)}
-              </button>
+          {/* Deposit & Withdraw */}
+          <div className="card p-5 space-y-4">
+            <div>
+              <p className="section-label mb-2.5">{t("dash.deposit", lang)}</p>
+              <div className="flex gap-2">
+                <input type="number" step="50" value={depositAmount}
+                  onChange={(e) => setDepositAmount(e.target.value)}
+                  className="input-field flex-1" placeholder="USD" />
+                <button onClick={handleDeposit} disabled={isProcessing}
+                  className="btn-primary px-4 py-2.5 text-xs flex items-center gap-1.5 shrink-0">
+                  <ArrowDown className="w-3.5 h-3.5" />{t("dash.deposit", lang)}
+                </button>
+              </div>
             </div>
-          </div>
-
-          {/* Withdraw */}
-          <div className="card p-4">
-            <p className="text-xs text-gray-500 uppercase tracking-wide mb-2">{t("dash.withdraw", lang)}</p>
-            <div className="flex gap-2">
-              <input type="number" step="50" value={withdrawAmount}
-                onChange={(e) => setWithdrawAmount(e.target.value)}
-                className="input-field flex-1 text-sm" placeholder="USD" />
-              <button onClick={handleWithdraw} disabled={isProcessing}
-                className="btn-danger px-3 py-2 text-xs flex items-center gap-1">
-                <ArrowUp className="w-3.5 h-3.5" />{t("dash.withdraw", lang)}
-              </button>
+            <div className="border-t border-white/[0.04] pt-4">
+              <p className="section-label mb-2.5">{t("dash.withdraw", lang)}</p>
+              <div className="flex gap-2">
+                <input type="number" step="50" value={withdrawAmount}
+                  onChange={(e) => setWithdrawAmount(e.target.value)}
+                  className="input-field flex-1" placeholder="USD" />
+                <button onClick={handleWithdraw} disabled={isProcessing}
+                  className="btn-danger px-4 py-2.5 text-xs flex items-center gap-1.5 shrink-0">
+                  <ArrowUp className="w-3.5 h-3.5" />{t("dash.withdraw", lang)}
+                </button>
+              </div>
             </div>
           </div>
 
           {/* Positions */}
-          <div className="card p-4">
-            <p className="text-xs text-gray-500 uppercase tracking-wide mb-2">{t("dash.positions", lang)}</p>
+          <div className="card p-5">
+            <div className="flex items-center justify-between mb-3">
+              <p className="section-label">{t("dash.positions", lang)}</p>
+              {agent.positions.length > 0 && (
+                <span className="text-[11px] text-emerald-400 stat-value font-semibold">{agent.positions.length}</span>
+              )}
+            </div>
             {agent.positions.length === 0 ? (
-              <p className="text-xs text-gray-600">{t("dash.no_positions", lang)}</p>
+              <div className="text-center py-6">
+                <div className="w-10 h-10 mx-auto mb-2 rounded-xl bg-white/[0.03] flex items-center justify-center">
+                  <BarChart3 className="w-5 h-5 text-[#3d4254]" />
+                </div>
+                <p className="text-xs text-[#4b5563]">{t("dash.no_positions", lang)}</p>
+              </div>
             ) : (
-              <div className="space-y-1.5">
+              <div className="space-y-2">
                 {agent.positions.map((pos, i) => (
                   <button key={i} onClick={() => setSelectedCoin(pos.coinId)}
-                    className={`w-full text-left px-2.5 py-2 rounded-lg transition-colors ${
-                      selectedCoin === pos.coinId ? "bg-green-500/10 border border-green-500/30" : "bg-[#12141c] hover:bg-[#161822]"
-                    }`}>
-                    <div className="flex justify-between items-center text-sm">
-                      <span className="font-mono text-gray-300 font-medium">{pos.symbol}</span>
-                      <span className="font-mono text-gray-400">${fmtUSD(pos.amount * pos.currentPrice)}</span>
+                    className={`position-card w-full text-left ${selectedCoin === pos.coinId ? "active" : ""}`}>
+                    <div className="flex justify-between items-center">
+                      <span className="stat-value text-sm text-[#e5e7eb] font-bold">{pos.symbol}</span>
+                      <span className="stat-value text-sm text-[#e5e7eb]">${fmtUSD(pos.amount * pos.currentPrice)}</span>
                     </div>
-                    <div className="flex justify-between items-center text-[10px] mt-0.5">
-                      <span className="text-gray-600">{pos.amount.toFixed(4)} @ ${fmtUSD(pos.avgBuyPrice)}</span>
-                      <span className={pos.unrealizedPnLPct >= 0 ? "text-green-400" : "text-red-400"}>
+                    <div className="flex justify-between items-center text-[11px] mt-1.5">
+                      <span className="text-[#6b7280]">{pos.amount.toFixed(4)} @ ${fmtUSD(pos.avgBuyPrice)}</span>
+                      <span className={`stat-value font-bold ${pos.unrealizedPnLPct >= 0 ? "text-emerald-400" : "text-red-400"}`}>
                         {pos.unrealizedPnLPct >= 0 ? "+" : ""}{pos.unrealizedPnLPct.toFixed(2)}%
                       </span>
                     </div>
@@ -1122,33 +1177,34 @@ export default function Home() {
         </div>
 
         {/* CENTER — Chart + AI Engine + Market + History */}
-        <div className="lg:col-span-5 space-y-3">
+        <div className="lg:col-span-5 space-y-4">
           {/* Price Chart */}
-          <div className="card p-4">
-            <div className="flex items-center justify-between mb-2">
-              <p className="text-xs text-gray-500 uppercase tracking-wide font-semibold">
-                {t("chart.title", lang)}
-                <span className="text-gray-300 ml-2 normal-case">
+          <div className="card p-5">
+            <div className="flex items-center justify-between mb-3">
+              <div className="flex items-center gap-2">
+                <p className="section-label">{t("chart.title", lang)}</p>
+                <span className="text-sm font-bold text-white">
                   {TRACKED_COINS.find((c) => c.id === selectedCoin)?.symbol || ""}
                 </span>
-              </p>
-              <span className="text-[10px] text-green-500 flex items-center gap-1">
-                <Activity className="w-3 h-3" /> CoinGecko
-              </span>
+              </div>
+              <div className="flex items-center gap-1.5 text-[10px] text-emerald-400 font-medium">
+                <div className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
+                CoinGecko
+              </div>
             </div>
             {/* Coin tabs */}
-            <div className="flex gap-1 mb-2 overflow-x-auto">
+            <div className="flex gap-1.5 mb-3 overflow-x-auto pb-1">
               {TRACKED_COINS.map((coin) => {
                 const active = selectedCoin === coin.id;
                 const asset = assets.find((a) => a.id === coin.id);
                 const ch = asset?.priceChangePercent24h || 0;
                 return (
                   <button key={coin.id} onClick={() => setSelectedCoin(coin.id)}
-                    className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-md text-[11px] shrink-0 transition-all ${
-                      active ? "bg-green-500/10 text-green-400 font-medium border border-green-500/30" : "bg-[#12141c] text-gray-500 hover:text-gray-300"
+                    className={`flex items-center gap-2 px-3 py-2 rounded-lg text-[11px] shrink-0 transition-all border ${
+                      active ? "bg-emerald-500/8 text-emerald-400 font-semibold border-emerald-500/20" : "bg-[#0c0e16] text-[#6b7280] border-transparent hover:border-white/[0.06] hover:text-[#9ca3af]"
                     }`}>
-                    <span>{coin.symbol}</span>
-                    <span className={`font-mono text-[10px] ${ch > 0 ? "text-green-400" : ch < 0 ? "text-red-400" : "text-gray-600"}`}>
+                    <span className="font-semibold">{coin.symbol}</span>
+                    <span className={`stat-value text-[10px] ${ch > 0 ? "text-emerald-400" : ch < 0 ? "text-red-400" : "text-[#4b5563]"}`}>
                       {ch > 0 ? "+" : ""}{ch.toFixed(2)}%
                     </span>
                   </button>
@@ -1156,78 +1212,91 @@ export default function Home() {
               })}
             </div>
             {dataLoading ? (
-              <div className="h-[260px] bg-[#12141c] rounded-lg flex items-center justify-center">
-                <Loader2 className="w-6 h-6 text-gray-600 animate-spin" />
+              <div className="h-[280px] bg-[#0c0e16] rounded-xl flex items-center justify-center border border-white/[0.03]">
+                <Loader2 className="w-6 h-6 text-[#3d4254] animate-spin" />
               </div>
             ) : chartCandles[selectedCoin] ? (
-              <PriceChart data={chartCandles[selectedCoin]} token={selectedCoin} height={260} />
+              <div className="rounded-xl overflow-hidden border border-white/[0.03]">
+                <PriceChart data={chartCandles[selectedCoin]} token={selectedCoin} height={280} />
+              </div>
             ) : (
-              <div className="h-[260px] bg-[#12141c] rounded-lg flex items-center justify-center text-xs text-gray-600">
+              <div className="h-[280px] bg-[#0c0e16] rounded-xl flex items-center justify-center text-xs text-[#4b5563] border border-white/[0.03]">
                 {t("data.no_data", lang)}
               </div>
             )}
           </div>
 
           {/* AI Engine */}
-          <div className="card p-4">
-            <div className="flex items-center justify-between mb-3">
-              <div className="flex items-center gap-2">
-                <p className="text-xs text-gray-500 uppercase tracking-wide font-semibold">{t("ai.engine", lang)}</p>
-                {isAutoMode && <CircleDot className="w-3 h-3 text-green-400 animate-pulse" />}
+          <div className="card p-5 relative overflow-hidden">
+            <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-emerald-500/30 via-blue-500/30 to-purple-500/30" />
+            <div className="flex items-center justify-between mb-4">
+              <div className="flex items-center gap-2.5">
+                <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-emerald-500/20 to-blue-500/20 flex items-center justify-center">
+                  <Zap className="w-4 h-4 text-emerald-400" />
+                </div>
+                <div>
+                  <p className="text-sm font-bold text-white">{t("ai.engine", lang)}</p>
+                  <p className="text-[10px] text-[#6b7280]">{t("ta.indicators", lang)}</p>
+                </div>
+                {isAutoMode && (
+                  <span className="tag bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 text-[10px]">
+                    <CircleDot className="w-3 h-3 animate-pulse" /> AUTO
+                  </span>
+                )}
               </div>
-              <span className="text-[10px] text-gray-600">
-                {t("ta.indicators", lang)}
-              </span>
             </div>
-            <div className="flex gap-2">
+            <div className="flex gap-3">
               <button onClick={runAI} disabled={isProcessing || agent.balanceUSD === 0 || dataLoading}
-                className="btn-primary flex-1 py-2.5 text-sm flex items-center justify-center gap-2">
+                className="btn-primary flex-1 py-3 text-sm font-bold flex items-center justify-center gap-2">
                 {isProcessing ? <Loader2 className="w-4 h-4 animate-spin" /> : <Play className="w-4 h-4" />}
                 {t("ai.run", lang)}
               </button>
               <button onClick={() => setIsAutoMode(!isAutoMode)} disabled={agent.balanceUSD === 0 || dataLoading}
-                className={`px-4 py-2.5 text-sm font-semibold rounded-lg transition-colors ${isAutoMode ? "btn-danger" : "btn-secondary"}`}>
+                className={`px-5 py-3 text-sm font-bold rounded-lg transition-all ${isAutoMode ? "btn-danger" : "btn-secondary"}`}>
                 {isAutoMode ? (
-                  <span className="flex items-center gap-1.5"><Square className="w-3.5 h-3.5" />{t("ai.stop", lang)}</span>
+                  <span className="flex items-center gap-2"><Square className="w-4 h-4" />{t("ai.stop", lang)}</span>
                 ) : t("ai.auto", lang)}
               </button>
             </div>
             {agent.balanceUSD === 0 && (
-              <p className="text-yellow-600 text-[11px] mt-2 text-center">{t("ai.need_deposit", lang)}</p>
+              <p className="text-amber-500/80 text-[11px] mt-3 text-center font-medium">{t("ai.need_deposit", lang)}</p>
             )}
           </div>
 
           {/* Live Market */}
-          <div className="card p-4">
-            <div className="flex items-center justify-between mb-2">
-              <p className="text-xs text-gray-500 uppercase tracking-wide font-semibold">{t("market.title", lang)}</p>
-              <span className="text-[10px] text-green-500">{t("data.live_prices", lang)}</span>
+          <div className="card p-5">
+            <div className="flex items-center justify-between mb-3">
+              <p className="section-label">{t("market.title", lang)}</p>
+              <div className="flex items-center gap-1.5 text-[10px] text-emerald-400 font-medium">
+                <div className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
+                {t("data.live_prices", lang)}
+              </div>
             </div>
-            <div className="space-y-1.5">
+            <div className="space-y-1">
               {assets.length === 0 ? (
-                <div className="flex items-center justify-center py-4">
-                  <Loader2 className="w-4 h-4 text-gray-600 animate-spin" />
+                <div className="flex items-center justify-center py-6">
+                  <Loader2 className="w-5 h-5 text-[#3d4254] animate-spin" />
                 </div>
               ) : assets.map((asset) => {
                 const ch = asset.priceChangePercent24h;
                 const up = ch > 0;
                 return (
                   <button key={asset.id} onClick={() => setSelectedCoin(asset.id)}
-                    className={`flex items-center justify-between py-1.5 px-2 rounded-lg w-full text-left transition-colors ${
-                      selectedCoin === asset.id ? "bg-green-500/10" : "bg-[#12141c] hover:bg-[#161822]"
-                    }`}>
-                    <div className="flex items-center gap-2">
-                      {up ? <TrendingUp className="w-3.5 h-3.5 text-green-400" /> :
-                       ch < 0 ? <TrendingDown className="w-3.5 h-3.5 text-red-400" /> :
-                       <Minus className="w-3.5 h-3.5 text-gray-600" />}
+                    className={`market-row w-full text-left ${selectedCoin === asset.id ? "active" : ""}`}>
+                    <div className="flex items-center gap-2.5">
+                      <div className={`w-7 h-7 rounded-lg flex items-center justify-center ${up ? "bg-emerald-500/10" : ch < 0 ? "bg-red-500/10" : "bg-white/[0.03]"}`}>
+                        {up ? <TrendingUp className="w-3.5 h-3.5 text-emerald-400" /> :
+                         ch < 0 ? <TrendingDown className="w-3.5 h-3.5 text-red-400" /> :
+                         <Minus className="w-3.5 h-3.5 text-[#4b5563]" />}
+                      </div>
                       <div>
-                        <span className="font-mono text-sm text-gray-300">{asset.symbol}</span>
-                        <span className="text-[10px] text-gray-600 ml-1.5">{asset.name}</span>
+                        <span className="stat-value text-sm text-[#e5e7eb] font-semibold">{asset.symbol}</span>
+                        <span className="text-[10px] text-[#4b5563] ml-2">{asset.name}</span>
                       </div>
                     </div>
-                    <div className="flex items-center gap-3">
-                      <span className="font-mono text-xs text-gray-400">${fmtUSD(asset.currentPrice)}</span>
-                      <span className={`font-mono text-xs min-w-[52px] text-right ${up ? "text-green-400" : ch < 0 ? "text-red-400" : "text-gray-600"}`}>
+                    <div className="flex items-center gap-4">
+                      <span className="stat-value text-xs text-[#e5e7eb]">${fmtUSD(asset.currentPrice)}</span>
+                      <span className={`stat-value text-xs min-w-[52px] text-right font-semibold ${up ? "text-emerald-400" : ch < 0 ? "text-red-400" : "text-[#4b5563]"}`}>
                         {ch > 0 ? "+" : ""}{ch.toFixed(2)}%
                       </span>
                     </div>
@@ -1238,15 +1307,17 @@ export default function Home() {
           </div>
 
           {/* History */}
-          <div className="card p-4 max-h-72 overflow-y-auto">
-            <div className="flex items-center justify-between mb-2">
-              <p className="text-xs text-gray-500 uppercase tracking-wide font-semibold">{t("history.title", lang)}</p>
+          <div className="card p-5 max-h-80 overflow-y-auto">
+            <div className="flex items-center justify-between mb-3">
+              <p className="section-label">{t("history.title", lang)}</p>
               {agent.history.length > 0 && (
-                <span className="text-[10px] text-gray-600">{agent.history.length} {t("history.total", lang)}</span>
+                <span className="text-[11px] text-[#6b7280] stat-value">{agent.history.length} {t("history.total", lang)}</span>
               )}
             </div>
             {agent.history.length === 0 ? (
-              <p className="text-xs text-gray-600">{t("history.empty", lang)}</p>
+              <div className="text-center py-6">
+                <p className="text-xs text-[#4b5563]">{t("history.empty", lang)}</p>
+              </div>
             ) : (
               <>
                 {(() => {
@@ -1255,42 +1326,42 @@ export default function Home() {
                   const holds = agent.history.filter((h) => h.action === "HOLD");
                   const totalVol = [...buys, ...sells].reduce((s, h) => s + h.amountUSD, 0);
                   return (
-                    <div className="grid grid-cols-4 gap-1.5 mb-3">
-                      <div className="bg-[#12141c] rounded-md px-2 py-1.5 text-center">
-                        <p className="text-[10px] text-gray-600">{t("history.buys", lang)}</p>
-                        <p className="text-sm font-bold text-green-400">{buys.length}</p>
+                    <div className="grid grid-cols-4 gap-2 mb-4">
+                      <div className="data-cell">
+                        <p className="text-[10px] text-[#6b7280] mb-0.5">{t("history.buys", lang)}</p>
+                        <p className="text-sm font-bold text-emerald-400 stat-value">{buys.length}</p>
                       </div>
-                      <div className="bg-[#12141c] rounded-md px-2 py-1.5 text-center">
-                        <p className="text-[10px] text-gray-600">{t("history.sells", lang)}</p>
-                        <p className="text-sm font-bold text-red-400">{sells.length}</p>
+                      <div className="data-cell">
+                        <p className="text-[10px] text-[#6b7280] mb-0.5">{t("history.sells", lang)}</p>
+                        <p className="text-sm font-bold text-red-400 stat-value">{sells.length}</p>
                       </div>
-                      <div className="bg-[#12141c] rounded-md px-2 py-1.5 text-center">
-                        <p className="text-[10px] text-gray-600">{t("history.holds", lang)}</p>
-                        <p className="text-sm font-bold text-yellow-500">{holds.length}</p>
+                      <div className="data-cell">
+                        <p className="text-[10px] text-[#6b7280] mb-0.5">{t("history.holds", lang)}</p>
+                        <p className="text-sm font-bold text-amber-400 stat-value">{holds.length}</p>
                       </div>
-                      <div className="bg-[#12141c] rounded-md px-2 py-1.5 text-center">
-                        <p className="text-[10px] text-gray-600">{t("history.volume", lang)}</p>
-                        <p className="text-sm font-bold text-gray-300">${fmtUSD(totalVol)}</p>
+                      <div className="data-cell">
+                        <p className="text-[10px] text-[#6b7280] mb-0.5">{t("history.volume", lang)}</p>
+                        <p className="text-sm font-bold text-[#e5e7eb] stat-value">${fmtUSD(totalVol)}</p>
                       </div>
                     </div>
                   );
                 })()}
                 <div className="space-y-1.5">
                   {agent.history.slice().reverse().map((h, i) => (
-                    <div key={i} className="bg-[#12141c] rounded-lg px-2.5 py-2 flex items-center gap-2">
-                      <span className={`text-[9px] font-bold uppercase px-1.5 py-0.5 rounded min-w-[42px] text-center ${
-                        h.action === "BUY" ? "bg-green-500/15 text-green-400" :
-                        h.action === "SELL" ? "bg-red-500/15 text-red-400" :
-                        "bg-yellow-500/10 text-yellow-500"
+                    <div key={i} className="flex items-center gap-2.5 px-3 py-2.5 rounded-lg bg-[#0c0e16] border border-transparent hover:border-white/[0.04] transition-all">
+                      <span className={`text-[9px] font-bold uppercase px-2 py-1 rounded-md min-w-[44px] text-center ${
+                        h.action === "BUY" ? "bg-emerald-500/12 text-emerald-400" :
+                        h.action === "SELL" ? "bg-red-500/12 text-red-400" :
+                        "bg-amber-500/10 text-amber-400"
                       }`}>{h.action}</span>
-                      <span className="text-xs font-mono text-gray-300 min-w-[36px]">{h.symbol}</span>
-                      <span className="text-[11px] font-mono text-gray-400 flex-1 text-right">
+                      <span className="text-xs stat-value text-[#e5e7eb] font-semibold min-w-[40px]">{h.symbol}</span>
+                      <span className="text-[11px] stat-value text-[#9ca3af] flex-1 text-right">
                         {h.amountUSD > 0 ? `$${fmtUSD(h.amountUSD)}` : "-"}
                       </span>
-                      <span className={`text-[10px] font-mono min-w-[40px] text-right ${
-                        h.confidence >= 0.6 ? "text-green-400" : h.confidence >= 0.4 ? "text-yellow-400" : "text-gray-600"
+                      <span className={`text-[10px] stat-value min-w-[36px] text-right font-semibold ${
+                        h.confidence >= 0.6 ? "text-emerald-400" : h.confidence >= 0.4 ? "text-amber-400" : "text-[#4b5563]"
                       }`}>{Math.round(h.confidence * 100)}%</span>
-                      <span className="text-[10px] text-gray-700 min-w-[55px] text-right">
+                      <span className="text-[10px] text-[#3d4254] min-w-[55px] text-right stat-value">
                         {new Date(h.timestamp * 1000).toLocaleTimeString()}
                       </span>
                     </div>
@@ -1302,23 +1373,24 @@ export default function Home() {
         </div>
 
         {/* RIGHT — AI Log with TA details */}
-        <div className="lg:col-span-4 card p-4 flex flex-col max-h-[calc(100vh-100px)]">
-          <div className="flex items-center justify-between mb-3">
-            <p className="text-xs text-gray-500 uppercase tracking-wide font-semibold">{t("log.title", lang)}</p>
-            <span className="text-[10px] text-gray-600">{aiLog.length} {t("log.entries", lang)}</span>
+        <div className="lg:col-span-4 card p-5 flex flex-col max-h-[calc(100vh-100px)]">
+          <div className="flex items-center justify-between mb-4">
+            <p className="section-label">{t("log.title", lang)}</p>
+            <span className="text-[11px] text-[#6b7280] stat-value">{aiLog.length} {t("log.entries", lang)}</span>
           </div>
 
-          <div className="flex-1 overflow-y-auto space-y-2 min-h-0">
+          <div className="flex-1 overflow-y-auto space-y-2.5 min-h-0">
             {aiLog.length === 0 ? (
-              <div className="flex items-center justify-center h-24 text-gray-700">
+              <div className="flex flex-col items-center justify-center h-32 text-[#3d4254]">
+                <BarChart3 className="w-8 h-8 mb-2 opacity-30" />
                 <p className="text-xs">{t("log.empty", lang)}</p>
               </div>
             ) : (
               aiLog.map((entry) => {
                 const d = entry.decision;
                 const confPct = Math.round(d.confidence * 100);
-                const confColor = confPct >= 60 ? "bg-green-500" : confPct >= 40 ? "bg-yellow-500" : "bg-red-500";
-                const confTextColor = confPct >= 60 ? "text-green-400" : confPct >= 40 ? "text-yellow-400" : "text-red-400";
+                const confGradient = confPct >= 60 ? "from-emerald-500 to-emerald-400" : confPct >= 40 ? "from-amber-500 to-amber-400" : "from-red-500 to-red-400";
+                const confTextColor = confPct >= 60 ? "text-emerald-400" : confPct >= 40 ? "text-amber-400" : "text-red-400";
                 const expanded = expandedLogs.has(entry.id);
                 const a = d.analysis;
 
@@ -1333,93 +1405,69 @@ export default function Home() {
                   : t("log.conf_low", lang);
 
                 return (
-                  <div key={entry.id} className="rounded-lg bg-[#12141c] overflow-hidden">
+                  <div key={entry.id} className="log-entry">
                     <button onClick={() => toggleLog(entry.id)}
-                      className="w-full flex items-center justify-between px-3 py-2 hover:bg-[#161822] transition-colors text-left">
-                      <div className="flex items-center gap-2 flex-1 min-w-0">
-                        <span className={`text-[10px] font-bold uppercase px-1.5 py-0.5 rounded shrink-0 ${
-                          d.action === "BUY" ? "bg-green-500/15 text-green-400" :
-                          d.action === "SELL" ? "bg-red-500/15 text-red-400" :
-                          "bg-yellow-500/10 text-yellow-500"
+                      className="w-full flex items-center justify-between px-3.5 py-3 hover:bg-white/[0.02] transition-colors text-left">
+                      <div className="flex items-center gap-2.5 flex-1 min-w-0">
+                        <span className={`text-[10px] font-bold uppercase px-2 py-1 rounded-md shrink-0 ${
+                          d.action === "BUY" ? "bg-emerald-500/12 text-emerald-400" :
+                          d.action === "SELL" ? "bg-red-500/12 text-red-400" :
+                          "bg-amber-500/10 text-amber-400"
                         }`}>{d.action}</span>
-                        <span className="text-xs text-gray-300 truncate">{summaryText}</span>
+                        <span className="text-xs text-[#e5e7eb] truncate font-medium">{summaryText}</span>
                       </div>
-                      <div className="flex items-center gap-1.5 shrink-0 ml-2">
-                        <span className="text-[10px] text-gray-700">{new Date(entry.timestamp).toLocaleTimeString()}</span>
-                        {expanded ? <ChevronUp className="w-3.5 h-3.5 text-gray-600" /> : <ChevronDown className="w-3.5 h-3.5 text-gray-600" />}
+                      <div className="flex items-center gap-2 shrink-0 ml-2">
+                        <span className="text-[10px] text-[#3d4254] stat-value">{new Date(entry.timestamp).toLocaleTimeString()}</span>
+                        {expanded ? <ChevronUp className="w-3.5 h-3.5 text-[#4b5563]" /> : <ChevronDown className="w-3.5 h-3.5 text-[#4b5563]" />}
                       </div>
                     </button>
 
                     {expanded && (
-                      <div className="px-3 pb-3 border-t border-gray-800/50">
+                      <div className="px-3.5 pb-4 border-t border-white/[0.04] animate-slide-up">
                         {/* Recommendation + Score */}
-                        <div className="mt-2.5 flex items-center gap-2">
-                          <span className={`text-[10px] font-bold uppercase px-2 py-0.5 rounded ${
-                            a.recommendation.includes("BUY") ? "bg-green-500/15 text-green-400" :
-                            a.recommendation.includes("SELL") ? "bg-red-500/15 text-red-400" :
-                            "bg-yellow-500/10 text-yellow-500"
+                        <div className="mt-3 flex items-center gap-2 flex-wrap">
+                          <span className={`text-[10px] font-bold uppercase px-2.5 py-1 rounded-md ${
+                            a.recommendation.includes("BUY") ? "bg-emerald-500/12 text-emerald-400" :
+                            a.recommendation.includes("SELL") ? "bg-red-500/12 text-red-400" :
+                            "bg-amber-500/10 text-amber-400"
                           }`}>{a.recommendation}</span>
-                          <span className="text-[10px] text-gray-600">
-                            Score: <span className={a.overallScore > 0 ? "text-green-400" : a.overallScore < 0 ? "text-red-400" : "text-gray-400"}>
+                          <span className="text-[10px] text-[#6b7280]">
+                            Score: <span className={`font-semibold ${a.overallScore > 0 ? "text-emerald-400" : a.overallScore < 0 ? "text-red-400" : "text-[#9ca3af]"}`}>
                               {(a.overallScore * 100).toFixed(0)}%
                             </span>
                           </span>
-                          <span className={`text-[10px] px-1.5 py-0.5 rounded ${
-                            d.riskLevel === "low" ? "bg-green-500/10 text-green-400" :
-                            d.riskLevel === "high" ? "bg-red-500/10 text-red-400" :
-                            "bg-yellow-500/10 text-yellow-500"
+                          <span className={`text-[10px] px-2 py-0.5 rounded-md font-medium ${
+                            d.riskLevel === "low" ? "bg-emerald-500/8 text-emerald-400" :
+                            d.riskLevel === "high" ? "bg-red-500/8 text-red-400" :
+                            "bg-amber-500/8 text-amber-400"
                           }`}>{d.riskLevel} risk</span>
                         </div>
 
                         {/* TA Indicators */}
-                        <div className="mt-2.5 grid grid-cols-3 gap-1.5">
-                          <div className="bg-[#0f1117] rounded px-2 py-1.5 text-center">
-                            <p className="text-[9px] text-gray-600">RSI</p>
-                            <p className={`text-xs font-mono font-bold ${a.rsi < 30 ? "text-green-400" : a.rsi > 70 ? "text-red-400" : "text-gray-300"}`}>
-                              {a.rsi.toFixed(1)}
-                            </p>
-                          </div>
-                          <div className="bg-[#0f1117] rounded px-2 py-1.5 text-center">
-                            <p className="text-[9px] text-gray-600">MACD</p>
-                            <p className={`text-xs font-mono font-bold ${a.macd.histogram > 0 ? "text-green-400" : "text-red-400"}`}>
-                              {a.macd.histogram.toFixed(4)}
-                            </p>
-                          </div>
-                          <div className="bg-[#0f1117] rounded px-2 py-1.5 text-center">
-                            <p className="text-[9px] text-gray-600">ADX</p>
-                            <p className={`text-xs font-mono font-bold ${a.adx > 25 ? "text-green-400" : "text-gray-500"}`}>
-                              {a.adx.toFixed(1)}
-                            </p>
-                          </div>
-                          <div className="bg-[#0f1117] rounded px-2 py-1.5 text-center">
-                            <p className="text-[9px] text-gray-600">BB %B</p>
-                            <p className={`text-xs font-mono font-bold ${a.bollinger.percentB < 0.2 ? "text-green-400" : a.bollinger.percentB > 0.8 ? "text-red-400" : "text-gray-300"}`}>
-                              {(a.bollinger.percentB * 100).toFixed(0)}%
-                            </p>
-                          </div>
-                          <div className="bg-[#0f1117] rounded px-2 py-1.5 text-center">
-                            <p className="text-[9px] text-gray-600">Stoch %K</p>
-                            <p className={`text-xs font-mono font-bold ${a.stochastic.k < 20 ? "text-green-400" : a.stochastic.k > 80 ? "text-red-400" : "text-gray-300"}`}>
-                              {a.stochastic.k.toFixed(0)}
-                            </p>
-                          </div>
-                          <div className="bg-[#0f1117] rounded px-2 py-1.5 text-center">
-                            <p className="text-[9px] text-gray-600">{t("ta.trend", lang)}</p>
-                            <p className={`text-[10px] font-bold ${
-                              a.trend.trend.includes("up") ? "text-green-400" :
-                              a.trend.trend.includes("down") ? "text-red-400" : "text-gray-500"
-                            }`}>{a.trend.trend.replace("_", " ")}</p>
-                          </div>
+                        <div className="mt-3 grid grid-cols-3 gap-2">
+                          {[
+                            { label: "RSI", value: a.rsi.toFixed(1), color: a.rsi < 30 ? "text-emerald-400" : a.rsi > 70 ? "text-red-400" : "text-[#e5e7eb]" },
+                            { label: "MACD", value: a.macd.histogram.toFixed(4), color: a.macd.histogram > 0 ? "text-emerald-400" : "text-red-400" },
+                            { label: "ADX", value: a.adx.toFixed(1), color: a.adx > 25 ? "text-emerald-400" : "text-[#6b7280]" },
+                            { label: "BB %B", value: `${(a.bollinger.percentB * 100).toFixed(0)}%`, color: a.bollinger.percentB < 0.2 ? "text-emerald-400" : a.bollinger.percentB > 0.8 ? "text-red-400" : "text-[#e5e7eb]" },
+                            { label: "Stoch %K", value: a.stochastic.k.toFixed(0), color: a.stochastic.k < 20 ? "text-emerald-400" : a.stochastic.k > 80 ? "text-red-400" : "text-[#e5e7eb]" },
+                            { label: t("ta.trend", lang), value: a.trend.trend.replace("_", " "), color: a.trend.trend.includes("up") ? "text-emerald-400" : a.trend.trend.includes("down") ? "text-red-400" : "text-[#6b7280]" },
+                          ].map((ind) => (
+                            <div key={ind.label} className="data-cell">
+                              <p className="text-[9px] text-[#4b5563] mb-0.5">{ind.label}</p>
+                              <p className={`text-xs stat-value font-bold ${ind.color}`}>{ind.value}</p>
+                            </div>
+                          ))}
                         </div>
 
                         {/* Signals list */}
                         {d.signalsSummary.length > 0 && (
-                          <div className="mt-2.5 space-y-1">
-                            <p className="text-[10px] text-gray-600">{t("ta.signals", lang)}</p>
+                          <div className="mt-3 space-y-1.5">
+                            <p className="text-[10px] text-[#4b5563] font-semibold">{t("ta.signals", lang)}</p>
                             {d.signalsSummary.slice(0, 5).map((sig, si) => (
-                              <div key={si} className="text-[10px] text-gray-500 flex items-start gap-1.5">
-                                <span className={`shrink-0 mt-0.5 w-1.5 h-1.5 rounded-full ${
-                                  sig.includes("BUY") ? "bg-green-400" : sig.includes("SELL") ? "bg-red-400" : "bg-gray-600"
+                              <div key={si} className="text-[10px] text-[#9ca3af] flex items-start gap-2">
+                                <span className={`shrink-0 mt-1 w-1.5 h-1.5 rounded-full ${
+                                  sig.includes("BUY") ? "bg-emerald-400" : sig.includes("SELL") ? "bg-red-400" : "bg-[#4b5563]"
                                 }`} />
                                 <span>{sig}</span>
                               </div>
@@ -1428,21 +1476,21 @@ export default function Home() {
                         )}
 
                         {/* Confidence bar */}
-                        <div className="mt-2.5">
-                          <p className="text-[10px] text-gray-600 mb-1">{t("log.confidence", lang)}</p>
-                          <div className="flex items-center gap-2">
-                            <div className="flex-1 h-2 bg-gray-800 rounded-full overflow-hidden">
-                              <div className={`h-full rounded-full transition-all ${confColor}`} style={{ width: `${confPct}%` }} />
-                            </div>
-                            <span className={`text-xs font-semibold ${confTextColor}`}>{confPct}%</span>
+                        <div className="mt-3">
+                          <div className="flex items-center justify-between mb-1.5">
+                            <p className="text-[10px] text-[#4b5563] font-semibold">{t("log.confidence", lang)}</p>
+                            <span className={`text-xs font-bold stat-value ${confTextColor}`}>{confPct}%</span>
                           </div>
-                          <p className={`text-[10px] mt-1 ${confTextColor}`}>{confExplain}</p>
+                          <div className="progress-track">
+                            <div className={`progress-fill bg-gradient-to-r ${confGradient}`} style={{ width: `${confPct}%` }} />
+                          </div>
+                          <p className={`text-[10px] mt-1.5 font-medium ${confTextColor}`}>{confExplain}</p>
                         </div>
 
                         {/* Reasoning */}
-                        <div className="mt-2.5 border-t border-gray-800/50 pt-2">
-                          <p className="text-[10px] text-gray-600 mb-0.5">{t("ta.reasoning", lang)}</p>
-                          <p className="text-[11px] text-gray-500 leading-relaxed">{d.reasoning}</p>
+                        <div className="mt-3 pt-3 border-t border-white/[0.04]">
+                          <p className="text-[10px] text-[#4b5563] font-semibold mb-1">{t("ta.reasoning", lang)}</p>
+                          <p className="text-[11px] text-[#9ca3af] leading-relaxed">{d.reasoning}</p>
                         </div>
                       </div>
                     )}
@@ -1457,111 +1505,60 @@ export default function Home() {
 
       {/* P&L PERFORMANCE PANEL */}
       {pnlMetrics && agent.history.length > 0 && (
-        <div className="card p-4 mt-3">
-          <div className="flex items-center justify-between mb-3">
-            <div className="flex items-center gap-2">
-              <p className="text-xs text-gray-500 uppercase tracking-wide font-semibold">{t("pnl.title", lang)}</p>
-              <span className={`tag text-[10px] ${pnlMetrics.totalPnLUSD >= 0 ? "bg-green-500/10 text-green-400" : "bg-red-500/10 text-red-400"}`}>
+        <div className="card p-5 mt-4 relative overflow-hidden">
+          <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-emerald-500/20 via-blue-500/20 to-purple-500/20" />
+          <div className="flex items-center justify-between mb-4">
+            <div className="flex items-center gap-2.5">
+              <p className="section-label">{t("pnl.title", lang)}</p>
+              <span className={`tag text-[10px] border ${pnlMetrics.totalPnLUSD >= 0 ? "bg-emerald-500/8 text-emerald-400 border-emerald-500/20" : "bg-red-500/8 text-red-400 border-red-500/20"}`}>
                 {pnlMetrics.totalPnLUSD >= 0 ? "+" : ""}{pnlMetrics.totalPnLPct.toFixed(2)}%
               </span>
             </div>
-            <span className="text-[10px] text-gray-600">{pnlMetrics.totalTrades} {t("pnl.trades", lang).toLowerCase()}</span>
+            <span className="text-[11px] text-[#6b7280] stat-value">{pnlMetrics.totalTrades} {t("pnl.trades", lang).toLowerCase()}</span>
           </div>
 
           <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-8 gap-2">
-            {/* Total P&L */}
-            <div className="bg-[#12141c] rounded-lg p-2 text-center">
-              <p className="text-[9px] text-gray-600 uppercase">{t("pnl.total", lang)}</p>
-              <p className={`text-sm font-bold font-mono ${pnlMetrics.totalPnLUSD >= 0 ? "text-green-400" : "text-red-400"}`}>
-                {pnlMetrics.totalPnLUSD >= 0 ? "+" : ""}${fmtUSD(Math.abs(pnlMetrics.totalPnLUSD))}
-              </p>
-            </div>
-            {/* Realized */}
-            <div className="bg-[#12141c] rounded-lg p-2 text-center">
-              <p className="text-[9px] text-gray-600 uppercase">{t("pnl.realized", lang)}</p>
-              <p className={`text-sm font-bold font-mono ${pnlMetrics.realizedPnLUSD >= 0 ? "text-green-400" : "text-red-400"}`}>
-                {pnlMetrics.realizedPnLUSD >= 0 ? "+" : ""}${fmtUSD(Math.abs(pnlMetrics.realizedPnLUSD))}
-              </p>
-            </div>
-            {/* Unrealized */}
-            <div className="bg-[#12141c] rounded-lg p-2 text-center">
-              <p className="text-[9px] text-gray-600 uppercase">{t("pnl.unrealized", lang)}</p>
-              <p className={`text-sm font-bold font-mono ${pnlMetrics.unrealizedPnLUSD >= 0 ? "text-green-400" : "text-red-400"}`}>
-                {pnlMetrics.unrealizedPnLUSD >= 0 ? "+" : ""}${fmtUSD(Math.abs(pnlMetrics.unrealizedPnLUSD))}
-              </p>
-            </div>
-            {/* Win Rate */}
-            <div className="bg-[#12141c] rounded-lg p-2 text-center">
-              <p className="text-[9px] text-gray-600 uppercase">{t("pnl.win_rate", lang)}</p>
-              <p className={`text-sm font-bold font-mono ${pnlMetrics.winRate >= 50 ? "text-green-400" : pnlMetrics.totalTrades === 0 ? "text-gray-500" : "text-red-400"}`}>
-                {pnlMetrics.totalTrades > 0 ? `${pnlMetrics.winRate.toFixed(0)}%` : "—"}
-              </p>
-              {pnlMetrics.totalTrades > 0 && (
-                <p className="text-[9px] text-gray-600">{pnlMetrics.winningTrades}{t("pnl.wins", lang)}/{pnlMetrics.losingTrades}{t("pnl.losses", lang)}</p>
-              )}
-            </div>
-            {/* Profit Factor */}
-            <div className="bg-[#12141c] rounded-lg p-2 text-center">
-              <p className="text-[9px] text-gray-600 uppercase">{t("pnl.profit_factor", lang)}</p>
-              <p className={`text-sm font-bold font-mono ${pnlMetrics.profitFactor >= 1.5 ? "text-green-400" : pnlMetrics.profitFactor >= 1 ? "text-yellow-400" : pnlMetrics.totalTrades === 0 ? "text-gray-500" : "text-red-400"}`}>
-                {pnlMetrics.totalTrades > 0 ? (pnlMetrics.profitFactor === Infinity ? "∞" : pnlMetrics.profitFactor.toFixed(2)) : "—"}
-              </p>
-            </div>
-            {/* Max Drawdown */}
-            <div className="bg-[#12141c] rounded-lg p-2 text-center">
-              <p className="text-[9px] text-gray-600 uppercase">{t("pnl.max_dd", lang)}</p>
-              <p className="text-sm font-bold font-mono text-red-400">
-                {pnlMetrics.maxDrawdown > 0 ? `-${pnlMetrics.maxDrawdown.toFixed(1)}%` : "0%"}
-              </p>
-            </div>
-            {/* Sharpe */}
-            <div className="bg-[#12141c] rounded-lg p-2 text-center">
-              <p className="text-[9px] text-gray-600 uppercase">{t("pnl.sharpe", lang)}</p>
-              <p className={`text-sm font-bold font-mono ${pnlMetrics.sharpeRatio >= 1 ? "text-green-400" : pnlMetrics.sharpeRatio >= 0 ? "text-yellow-400" : "text-red-400"}`}>
-                {pnlMetrics.sharpeRatio.toFixed(2)}
-              </p>
-            </div>
-            {/* Streak */}
-            <div className="bg-[#12141c] rounded-lg p-2 text-center">
-              <p className="text-[9px] text-gray-600 uppercase">{t("pnl.streak", lang)}</p>
-              <p className={`text-sm font-bold font-mono ${pnlMetrics.currentStreak > 0 ? "text-green-400" : pnlMetrics.currentStreak < 0 ? "text-red-400" : "text-gray-500"}`}>
-                {pnlMetrics.currentStreak > 0 ? `+${pnlMetrics.currentStreak}` : pnlMetrics.currentStreak === 0 ? "—" : pnlMetrics.currentStreak}
-              </p>
-              {(pnlMetrics.longestWinStreak > 0 || pnlMetrics.longestLossStreak > 0) && (
-                <p className="text-[9px] text-gray-600">
-                  <span className="text-green-600">{pnlMetrics.longestWinStreak}{t("pnl.wins", lang)}</span>
-                  {" / "}
-                  <span className="text-red-600">{pnlMetrics.longestLossStreak}{t("pnl.losses", lang)}</span>
-                </p>
-              )}
-            </div>
+            {[
+              { label: t("pnl.total", lang), value: `${pnlMetrics.totalPnLUSD >= 0 ? "+" : ""}$${fmtUSD(Math.abs(pnlMetrics.totalPnLUSD))}`, color: pnlMetrics.totalPnLUSD >= 0 ? "text-emerald-400" : "text-red-400" },
+              { label: t("pnl.realized", lang), value: `${pnlMetrics.realizedPnLUSD >= 0 ? "+" : ""}$${fmtUSD(Math.abs(pnlMetrics.realizedPnLUSD))}`, color: pnlMetrics.realizedPnLUSD >= 0 ? "text-emerald-400" : "text-red-400" },
+              { label: t("pnl.unrealized", lang), value: `${pnlMetrics.unrealizedPnLUSD >= 0 ? "+" : ""}$${fmtUSD(Math.abs(pnlMetrics.unrealizedPnLUSD))}`, color: pnlMetrics.unrealizedPnLUSD >= 0 ? "text-emerald-400" : "text-red-400" },
+              { label: t("pnl.win_rate", lang), value: pnlMetrics.totalTrades > 0 ? `${pnlMetrics.winRate.toFixed(0)}%` : "—", color: pnlMetrics.winRate >= 50 ? "text-emerald-400" : pnlMetrics.totalTrades === 0 ? "text-[#6b7280]" : "text-red-400", sub: pnlMetrics.totalTrades > 0 ? `${pnlMetrics.winningTrades}${t("pnl.wins", lang)}/${pnlMetrics.losingTrades}${t("pnl.losses", lang)}` : undefined },
+              { label: t("pnl.profit_factor", lang), value: pnlMetrics.totalTrades > 0 ? (pnlMetrics.profitFactor === Infinity ? "∞" : pnlMetrics.profitFactor.toFixed(2)) : "—", color: pnlMetrics.profitFactor >= 1.5 ? "text-emerald-400" : pnlMetrics.profitFactor >= 1 ? "text-amber-400" : pnlMetrics.totalTrades === 0 ? "text-[#6b7280]" : "text-red-400" },
+              { label: t("pnl.max_dd", lang), value: pnlMetrics.maxDrawdown > 0 ? `-${pnlMetrics.maxDrawdown.toFixed(1)}%` : "0%", color: "text-red-400" },
+              { label: t("pnl.sharpe", lang), value: pnlMetrics.sharpeRatio.toFixed(2), color: pnlMetrics.sharpeRatio >= 1 ? "text-emerald-400" : pnlMetrics.sharpeRatio >= 0 ? "text-amber-400" : "text-red-400" },
+              { label: t("pnl.streak", lang), value: pnlMetrics.currentStreak > 0 ? `+${pnlMetrics.currentStreak}` : pnlMetrics.currentStreak === 0 ? "—" : `${pnlMetrics.currentStreak}`, color: pnlMetrics.currentStreak > 0 ? "text-emerald-400" : pnlMetrics.currentStreak < 0 ? "text-red-400" : "text-[#6b7280]", sub: (pnlMetrics.longestWinStreak > 0 || pnlMetrics.longestLossStreak > 0) ? `${pnlMetrics.longestWinStreak}${t("pnl.wins", lang)} / ${pnlMetrics.longestLossStreak}${t("pnl.losses", lang)}` : undefined },
+            ].map((m) => (
+              <div key={m.label} className="data-cell">
+                <p className="text-[9px] text-[#4b5563] uppercase mb-0.5">{m.label}</p>
+                <p className={`text-sm font-bold stat-value ${m.color}`}>{m.value}</p>
+                {(m as any).sub && <p className="text-[9px] text-[#4b5563] mt-0.5">{(m as any).sub}</p>}
+              </div>
+            ))}
           </div>
 
-          {/* Equity mini-bar + allocation */}
-          <div className="mt-3 flex items-center gap-3">
+          {/* Equity allocation bar */}
+          <div className="mt-4 flex items-center gap-4">
             <div className="flex-1">
-              <div className="flex items-center justify-between mb-1">
-                <span className="text-[9px] text-gray-600 uppercase">{t("pnl.equity", lang)}</span>
-                <span className="text-[10px] font-mono text-gray-400">${fmtUSD(pnlMetrics.totalEquity)}</span>
+              <div className="flex items-center justify-between mb-1.5">
+                <span className="text-[9px] text-[#4b5563] uppercase font-semibold">{t("pnl.equity", lang)}</span>
+                <span className="text-[11px] stat-value text-[#e5e7eb] font-semibold">${fmtUSD(pnlMetrics.totalEquity)}</span>
               </div>
-              <div className="h-2 bg-gray-800 rounded-full overflow-hidden flex">
-                <div className="h-full bg-blue-500/60 transition-all" style={{ width: `${pnlMetrics.cashPct}%` }}
-                  title={`${t("pnl.cash_pct", lang)}: ${pnlMetrics.cashPct.toFixed(0)}%`} />
-                <div className="h-full bg-green-500/60 transition-all" style={{ width: `${pnlMetrics.positionsPct}%` }}
-                  title={`${t("pnl.pos_pct", lang)}: ${pnlMetrics.positionsPct.toFixed(0)}%`} />
+              <div className="h-2 bg-[#0c0e16] rounded-full overflow-hidden flex">
+                <div className="h-full bg-gradient-to-r from-blue-500 to-blue-400 transition-all duration-500" style={{ width: `${pnlMetrics.cashPct}%` }} />
+                <div className="h-full bg-gradient-to-r from-emerald-500 to-emerald-400 transition-all duration-500" style={{ width: `${pnlMetrics.positionsPct}%` }} />
               </div>
-              <div className="flex justify-between mt-0.5">
-                <span className="text-[9px] text-blue-400">{t("pnl.cash_pct", lang)} {pnlMetrics.cashPct.toFixed(0)}%</span>
-                <span className="text-[9px] text-green-400">{t("pnl.pos_pct", lang)} {pnlMetrics.positionsPct.toFixed(0)}%</span>
+              <div className="flex justify-between mt-1">
+                <span className="text-[9px] text-blue-400 font-medium">{t("pnl.cash_pct", lang)} {pnlMetrics.cashPct.toFixed(0)}%</span>
+                <span className="text-[9px] text-emerald-400 font-medium">{t("pnl.pos_pct", lang)} {pnlMetrics.positionsPct.toFixed(0)}%</span>
               </div>
             </div>
             {pnlMetrics.totalTrades > 0 && (
-              <div className="text-right shrink-0">
-                <p className="text-[9px] text-gray-600">{t("pnl.expectancy", lang)}</p>
-                <p className={`text-xs font-mono font-bold ${pnlMetrics.expectancy >= 0 ? "text-green-400" : "text-red-400"}`}>
+              <div className="text-right shrink-0 pl-4 border-l border-white/[0.04]">
+                <p className="text-[9px] text-[#4b5563] uppercase font-semibold">{t("pnl.expectancy", lang)}</p>
+                <p className={`text-sm stat-value font-bold ${pnlMetrics.expectancy >= 0 ? "text-emerald-400" : "text-red-400"}`}>
                   {pnlMetrics.expectancy >= 0 ? "+" : ""}${fmtUSD(Math.abs(pnlMetrics.expectancy))}
                 </p>
-                <p className="text-[9px] text-gray-700">{t("pnl.per_trade", lang)}</p>
+                <p className="text-[9px] text-[#3d4254]">{t("pnl.per_trade", lang)}</p>
               </div>
             )}
           </div>
@@ -1569,51 +1566,48 @@ export default function Home() {
       )}
 
       {/* JUPITER DEX + ON-CHAIN */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-3 mt-3">
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 mt-4">
 
         {/* Jupiter DEX Status */}
-        <div className="card p-4">
-          <div className="flex items-center justify-between mb-2">
+        <div className="card p-5">
+          <div className="flex items-center justify-between mb-3">
             <div className="flex items-center gap-2">
-              <p className="text-xs text-gray-500 uppercase tracking-wide font-semibold">{t("jupiter.title", lang)}</p>
-              <span className={`tag text-[10px] ${swapSettings.enableRealSwaps ? "bg-red-500/10 text-red-400" : "bg-green-500/10 text-green-400"}`}>
+              <p className="section-label">{t("jupiter.title", lang)}</p>
+              <span className={`tag text-[10px] border ${swapSettings.enableRealSwaps ? "bg-red-500/8 text-red-400 border-red-500/20" : "bg-emerald-500/8 text-emerald-400 border-emerald-500/20"}`}>
                 {swapSettings.enableRealSwaps ? "LIVE" : t("jupiter.simulation", lang)}
               </span>
             </div>
             <button onClick={() => setShowSwapSettings(true)}
-              className="btn-secondary px-2 py-1 text-[10px]">
+              className="btn-secondary px-3 py-1.5 text-[10px]">
               {t("jupiter.settings", lang)}
             </button>
           </div>
 
-          <div className="space-y-1.5 text-[11px]">
-            <div className="flex justify-between">
-              <span className="text-gray-600">{t("jupiter.slippage", lang)}</span>
-              <span className="text-gray-400 font-mono">{(swapSettings.slippageBps / 100).toFixed(1)}%</span>
-            </div>
-            <div className="flex justify-between">
-              <span className="text-gray-600">{t("jupiter.max_trade", lang)}</span>
-              <span className="text-gray-400 font-mono">${swapSettings.maxTradeUSD}</span>
-            </div>
-            <div className="flex justify-between">
-              <span className="text-gray-600">{t("jupiter.max_impact", lang)}</span>
-              <span className="text-gray-400 font-mono">{swapSettings.maxPriceImpactPct}%</span>
-            </div>
+          <div className="space-y-2 text-xs">
+            {[
+              { label: t("jupiter.slippage", lang), value: `${(swapSettings.slippageBps / 100).toFixed(1)}%` },
+              { label: t("jupiter.max_trade", lang), value: `$${swapSettings.maxTradeUSD}` },
+              { label: t("jupiter.max_impact", lang), value: `${swapSettings.maxPriceImpactPct}%` },
+            ].map((row) => (
+              <div key={row.label} className="flex justify-between">
+                <span className="text-[#6b7280]">{row.label}</span>
+                <span className="stat-value text-[#e5e7eb]">{row.value}</span>
+              </div>
+            ))}
           </div>
 
-          {/* Last swap results */}
           {lastSwapResults.length > 0 && (
-            <div className="mt-3 border-t border-gray-800/50 pt-2">
-              <p className="text-[10px] text-gray-600 mb-1.5">{lang === "ru" ? "Последние свопы" : "Recent Swaps"}</p>
-              <div className="space-y-1">
+            <div className="mt-4 pt-3 border-t border-white/[0.04]">
+              <p className="text-[10px] text-[#4b5563] font-semibold mb-2">{lang === "ru" ? "Последние свопы" : "Recent Swaps"}</p>
+              <div className="space-y-1.5">
                 {lastSwapResults.slice(0, 4).map((sr, i) => (
-                  <div key={i} className={`flex items-center justify-between bg-[#12141c] rounded px-2 py-1 ${sr.success ? "" : "opacity-50"}`}>
-                    <span className="text-[10px] font-mono text-gray-400">
+                  <div key={i} className={`flex items-center justify-between rounded-lg px-3 py-2 bg-[#0c0e16] border border-white/[0.03] ${sr.success ? "" : "opacity-40"}`}>
+                    <span className="text-[10px] stat-value text-[#9ca3af]">
                       {sr.inputAmount.toFixed(3)} {sr.inputSymbol} → {sr.outputAmount.toFixed(3)} {sr.outputSymbol}
                     </span>
                     {sr.success
-                      ? <CheckCircle2 className="w-3 h-3 text-green-400" />
-                      : <AlertTriangle className="w-3 h-3 text-red-400" />}
+                      ? <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400" />
+                      : <AlertTriangle className="w-3.5 h-3.5 text-red-400" />}
                   </div>
                 ))}
               </div>
@@ -1622,13 +1616,16 @@ export default function Home() {
         </div>
 
         {/* Token Balances */}
-        <div className="card p-4">
-          <p className="text-xs text-gray-500 uppercase tracking-wide font-semibold mb-2">{t("jupiter.balances", lang)}</p>
+        <div className="card p-5">
+          <p className="section-label mb-3">{t("jupiter.balances", lang)}</p>
           {!connected ? (
-            <p className="text-xs text-gray-600 text-center py-4">{t("jupiter.no_wallet", lang)}</p>
+            <div className="text-center py-6">
+              <Wallet className="w-8 h-8 mx-auto mb-2 text-[#3d4254]" />
+              <p className="text-xs text-[#4b5563]">{t("jupiter.no_wallet", lang)}</p>
+            </div>
           ) : Object.keys(tokenBalances).length === 0 ? (
-            <div className="flex items-center justify-center py-4">
-              <Loader2 className="w-4 h-4 text-gray-600 animate-spin" />
+            <div className="flex items-center justify-center py-6">
+              <Loader2 className="w-5 h-5 text-[#3d4254] animate-spin" />
             </div>
           ) : (
             <div className="space-y-1.5">
@@ -1639,13 +1636,13 @@ export default function Home() {
                   const asset = assets.find((a) => COINGECKO_TO_SYMBOL[a.id] === sym);
                   const usdVal = asset ? bal * asset.currentPrice : 0;
                   return (
-                    <div key={sym} className="flex items-center justify-between bg-[#12141c] rounded-lg px-2.5 py-1.5">
-                      <div>
-                        <span className="font-mono text-xs text-gray-300 font-medium">{sym}</span>
-                        <span className="text-[10px] text-gray-600 ml-1.5">{bal < 0.01 ? bal.toFixed(6) : bal < 1 ? bal.toFixed(4) : bal.toFixed(2)}</span>
+                    <div key={sym} className="flex items-center justify-between rounded-lg px-3 py-2.5 bg-[#0c0e16] border border-white/[0.03]">
+                      <div className="flex items-center gap-2">
+                        <span className="stat-value text-xs text-[#e5e7eb] font-semibold">{sym}</span>
+                        <span className="text-[10px] text-[#4b5563] stat-value">{bal < 0.01 ? bal.toFixed(6) : bal < 1 ? bal.toFixed(4) : bal.toFixed(2)}</span>
                       </div>
                       {usdVal > 0.01 && (
-                        <span className="font-mono text-[10px] text-gray-500">${fmtUSD(usdVal)}</span>
+                        <span className="stat-value text-[10px] text-[#6b7280]">${fmtUSD(usdVal)}</span>
                       )}
                     </div>
                   );
@@ -1655,44 +1652,51 @@ export default function Home() {
         </div>
 
         {/* On-Chain Transactions */}
-        <div className="card p-4">
-          <div className="flex items-center justify-between mb-2">
+        <div className="card p-5">
+          <div className="flex items-center justify-between mb-3">
             <div className="flex items-center gap-2">
-              <p className="text-xs text-gray-500 uppercase tracking-wide font-semibold">On-Chain TX</p>
-              <span className="tag bg-purple-500/10 text-purple-400 text-[10px]">{SOLANA_NETWORK}</span>
-              {connected && <div className="w-2 h-2 rounded-full bg-green-400" />}
+              <p className="section-label">On-Chain TX</p>
+              <span className="tag bg-purple-500/8 text-purple-400 text-[10px] border border-purple-500/20">{SOLANA_NETWORK}</span>
+              {connected && <div className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />}
             </div>
             {!connected && (
               <button onClick={() => setWalletModalVisible(true)}
-                className="btn-secondary px-2 py-1 text-[10px] flex items-center gap-1">
+                className="btn-secondary px-3 py-1.5 text-[10px] flex items-center gap-1.5">
                 <Wallet className="w-3 h-3" /> Connect
               </button>
             )}
           </div>
 
           {!connected ? (
-            <p className="text-xs text-gray-600 text-center py-4">
-              {lang === "ru"
-                ? "Подключи Phantom для записи в блокчейн"
-                : "Connect Phantom for on-chain recording"}
-            </p>
+            <div className="text-center py-6">
+              <div className="w-10 h-10 mx-auto mb-2 rounded-xl bg-purple-500/8 flex items-center justify-center">
+                <Wallet className="w-5 h-5 text-purple-400/50" />
+              </div>
+              <p className="text-xs text-[#4b5563]">
+                {lang === "ru"
+                  ? "Подключи Phantom для записи в блокчейн"
+                  : "Connect Phantom for on-chain recording"}
+              </p>
+            </div>
           ) : (
             <div className="space-y-1.5">
               {txSignatures.length === 0 ? (
-                <p className="text-xs text-gray-600 text-center py-2">
-                  {lang === "ru"
-                    ? "Запусти ИИ — BUY/SELL запишется on-chain"
-                    : "Run AI — BUY/SELL will be recorded on-chain"}
-                </p>
+                <div className="text-center py-4">
+                  <p className="text-xs text-[#4b5563]">
+                    {lang === "ru"
+                      ? "Запусти ИИ — BUY/SELL запишется on-chain"
+                      : "Run AI — BUY/SELL will be recorded on-chain"}
+                  </p>
+                </div>
               ) : (
                 txSignatures.slice(0, 6).map((sig, i) => (
-                  <div key={sig + i} className="flex items-center justify-between bg-[#12141c] rounded px-2.5 py-1.5">
-                    <div className="flex items-center gap-1.5">
-                      <CheckCircle2 className="w-3 h-3 text-green-400" />
-                      <span className="font-mono text-[10px] text-gray-400">{sig.slice(0, 12)}...{sig.slice(-6)}</span>
+                  <div key={sig + i} className="flex items-center justify-between rounded-lg px-3 py-2.5 bg-[#0c0e16] border border-white/[0.03]">
+                    <div className="flex items-center gap-2">
+                      <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400" />
+                      <span className="stat-value text-[10px] text-[#9ca3af]">{sig.slice(0, 12)}...{sig.slice(-6)}</span>
                     </div>
                     <a href={getExplorerUrl(sig)} target="_blank" rel="noopener noreferrer"
-                      className="text-[10px] text-blue-400 hover:text-blue-300 underline">
+                      className="text-[10px] text-blue-400 hover:text-blue-300 font-medium transition-colors">
                       Explorer →
                     </a>
                   </div>
@@ -1704,91 +1708,73 @@ export default function Home() {
       </div>
 
       {/* TELEGRAM ALERTS */}
-      <div className="card p-4 mt-3">
-        <div className="flex items-center justify-between mb-2">
-          <div className="flex items-center gap-2">
-            <p className="text-xs text-gray-500 uppercase tracking-wide font-semibold">{t("tg.title", lang)}</p>
-            <span className={`tag text-[10px] ${tgSettings.enabled ? "bg-green-500/10 text-green-400" : "bg-gray-500/10 text-gray-500"}`}>
+      <div className="card p-5 mt-4">
+        <div className="flex items-center justify-between mb-3">
+          <div className="flex items-center gap-2.5">
+            <p className="section-label">{t("tg.title", lang)}</p>
+            <span className={`tag text-[10px] border ${tgSettings.enabled ? "bg-emerald-500/8 text-emerald-400 border-emerald-500/20" : "bg-white/[0.03] text-[#4b5563] border-white/[0.06]"}`}>
               {tgSettings.enabled ? t("tg.enabled", lang) : t("tg.disabled", lang)}
             </span>
             {tgAlertCount > 0 && (
-              <span className="text-[10px] text-gray-600">{tgAlertCount} {t("tg.alerts_sent", lang)}</span>
+              <span className="text-[11px] text-[#6b7280] stat-value">{tgAlertCount} {t("tg.alerts_sent", lang)}</span>
             )}
           </div>
           <button onClick={() => setShowTgSettings((v) => !v)}
-            className="btn-secondary px-2.5 py-1 text-[10px] flex items-center gap-1">
+            className="btn-secondary px-3 py-1.5 text-[10px] flex items-center gap-1.5">
             {showTgSettings ? <ChevronUp className="w-3 h-3" /> : <Settings className="w-3 h-3" />}
             {showTgSettings ? (lang === "ru" ? "Скрыть" : "Hide") : (lang === "ru" ? "Настройки" : "Settings")}
           </button>
         </div>
 
-        {/* Status line */}
         {tgSettings.enabled && tgLastSent && (
-          <p className="text-[10px] text-gray-600 mb-2">{t("tg.last_sent", lang)}: {tgLastSent}</p>
+          <p className="text-[10px] text-[#4b5563] mb-3">{t("tg.last_sent", lang)}: {tgLastSent}</p>
         )}
 
         {showTgSettings && (
-          <div className="space-y-3 mt-2">
-            <p className="text-[10px] text-gray-600">{t("tg.setup_hint", lang)}</p>
+          <div className="space-y-4 mt-3 animate-slide-up">
+            <p className="text-[11px] text-[#6b7280]">{t("tg.setup_hint", lang)}</p>
 
-            {/* Bot Token */}
             <div>
-              <label className="text-[10px] text-gray-500 uppercase tracking-wide">{t("tg.bot_token", lang)}</label>
-              <input
-                type="password"
-                value={tgSettings.botToken}
+              <label className="section-label">{t("tg.bot_token", lang)}</label>
+              <input type="password" value={tgSettings.botToken}
                 onChange={(e) => setTgSettings((s) => ({ ...s, botToken: e.target.value }))}
                 placeholder="123456:ABC-DEF..."
-                className="w-full mt-1 px-2.5 py-1.5 bg-[#12141c] border border-gray-800 rounded text-xs font-mono text-gray-300 focus:border-blue-500 focus:outline-none"
-              />
+                className="input-field w-full mt-1.5 text-xs stat-value" />
             </div>
 
-            {/* Chat ID */}
             <div>
-              <label className="text-[10px] text-gray-500 uppercase tracking-wide">{t("tg.chat_id", lang)}</label>
-              <input
-                type="text"
-                value={tgSettings.chatId}
+              <label className="section-label">{t("tg.chat_id", lang)}</label>
+              <input type="text" value={tgSettings.chatId}
                 onChange={(e) => setTgSettings((s) => ({ ...s, chatId: e.target.value }))}
                 placeholder="-1001234567890"
-                className="w-full mt-1 px-2.5 py-1.5 bg-[#12141c] border border-gray-800 rounded text-xs font-mono text-gray-300 focus:border-blue-500 focus:outline-none"
-              />
+                className="input-field w-full mt-1.5 text-xs stat-value" />
             </div>
 
-            {/* Toggles */}
             <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
-              {/* Enable */}
-              <button
-                onClick={() => setTgSettings((s) => ({ ...s, enabled: !s.enabled }))}
-                className={`px-2.5 py-1.5 rounded text-xs font-medium flex items-center gap-1.5 justify-center ${
-                  tgSettings.enabled ? "bg-green-500/15 text-green-400 border border-green-500/30" : "bg-[#12141c] text-gray-500 border border-gray-800"
+              <button onClick={() => setTgSettings((s) => ({ ...s, enabled: !s.enabled }))}
+                className={`px-3 py-2 rounded-lg text-xs font-semibold flex items-center gap-2 justify-center transition-all border ${
+                  tgSettings.enabled ? "bg-emerald-500/8 text-emerald-400 border-emerald-500/20" : "bg-[#0c0e16] text-[#4b5563] border-white/[0.04]"
                 }`}>
-                <div className={`w-2 h-2 rounded-full ${tgSettings.enabled ? "bg-green-400" : "bg-gray-600"}`} />
+                <div className={`w-2 h-2 rounded-full ${tgSettings.enabled ? "bg-emerald-400" : "bg-[#4b5563]"}`} />
                 {tgSettings.enabled ? t("tg.enabled", lang) : t("tg.disabled", lang)}
               </button>
-              {/* Trade Alerts */}
-              <button
-                onClick={() => setTgSettings((s) => ({ ...s, sendTradeAlerts: !s.sendTradeAlerts }))}
-                className={`px-2.5 py-1.5 rounded text-xs flex items-center gap-1.5 justify-center ${
-                  tgSettings.sendTradeAlerts ? "bg-blue-500/15 text-blue-400 border border-blue-500/30" : "bg-[#12141c] text-gray-500 border border-gray-800"
+              <button onClick={() => setTgSettings((s) => ({ ...s, sendTradeAlerts: !s.sendTradeAlerts }))}
+                className={`px-3 py-2 rounded-lg text-xs font-semibold flex items-center gap-2 justify-center transition-all border ${
+                  tgSettings.sendTradeAlerts ? "bg-blue-500/8 text-blue-400 border-blue-500/20" : "bg-[#0c0e16] text-[#4b5563] border-white/[0.04]"
                 }`}>
                 {t("tg.trade_alerts", lang)}
               </button>
-              {/* P&L Reports */}
-              <button
-                onClick={() => setTgSettings((s) => ({ ...s, sendPnLReports: !s.sendPnLReports }))}
-                className={`px-2.5 py-1.5 rounded text-xs flex items-center gap-1.5 justify-center ${
-                  tgSettings.sendPnLReports ? "bg-purple-500/15 text-purple-400 border border-purple-500/30" : "bg-[#12141c] text-gray-500 border border-gray-800"
+              <button onClick={() => setTgSettings((s) => ({ ...s, sendPnLReports: !s.sendPnLReports }))}
+                className={`px-3 py-2 rounded-lg text-xs font-semibold flex items-center gap-2 justify-center transition-all border ${
+                  tgSettings.sendPnLReports ? "bg-purple-500/8 text-purple-400 border-purple-500/20" : "bg-[#0c0e16] text-[#4b5563] border-white/[0.04]"
                 }`}>
                 {t("tg.pnl_reports", lang)}
               </button>
-              {/* Report Interval */}
-              <div className="flex items-center gap-1">
-                <span className="text-[10px] text-gray-500 shrink-0">{t("tg.report_interval", lang)}</span>
-                <select
-                  value={tgSettings.reportIntervalMin}
+              <div className="flex items-center gap-2">
+                <span className="text-[10px] text-[#4b5563] shrink-0">{t("tg.report_interval", lang)}</span>
+                <select value={tgSettings.reportIntervalMin}
                   onChange={(e) => setTgSettings((s) => ({ ...s, reportIntervalMin: Number(e.target.value) }))}
-                  className="bg-[#12141c] border border-gray-800 rounded px-1.5 py-1 text-xs text-gray-300 focus:outline-none">
+                  className="bg-[#0c0e16] border border-white/[0.06] rounded-lg px-2 py-1.5 text-xs text-[#e5e7eb] focus:outline-none focus:border-emerald-500/30 transition-colors">
                   <option value={15}>15{t("tg.minutes", lang)}</option>
                   <option value={30}>30{t("tg.minutes", lang)}</option>
                   <option value={60}>60{t("tg.minutes", lang)}</option>
@@ -1797,86 +1783,70 @@ export default function Home() {
               </div>
             </div>
 
-            {/* Test button */}
             <button
               onClick={async () => {
                 setTgTesting(true);
                 const result = await testTelegramConnection(tgSettings.botToken, tgSettings.chatId);
-                if (result.success) {
-                  addToast(t("tg.test_ok", lang), "success");
-                } else {
-                  addToast(`${t("tg.test_fail", lang)}: ${result.error || ""}`, "error");
-                }
+                if (result.success) { addToast(t("tg.test_ok", lang), "success"); }
+                else { addToast(`${t("tg.test_fail", lang)}: ${result.error || ""}`, "error"); }
                 setTgTesting(false);
               }}
               disabled={tgTesting || !tgSettings.botToken || !tgSettings.chatId}
-              className="btn-primary px-4 py-1.5 text-xs w-full flex items-center justify-center gap-1.5 disabled:opacity-50">
+              className="btn-primary px-4 py-2.5 text-xs w-full flex items-center justify-center gap-2 disabled:opacity-40">
               {tgTesting ? (
                 <><Loader2 className="w-3.5 h-3.5 animate-spin" />{t("tg.testing", lang)}</>
-              ) : (
-                <>{t("tg.test", lang)}</>
-              )}
+              ) : t("tg.test", lang)}
             </button>
           </div>
         )}
       </div>
 
       {/* ML PREDICTOR */}
-      <div className="card p-4 mt-3">
-        <div className="flex items-center justify-between mb-2">
-          <div className="flex items-center gap-2">
-            <p className="text-xs text-gray-500 uppercase tracking-wide font-semibold">{t("ml.title", lang)}</p>
+      <div className="card p-5 mt-4">
+        <div className="flex items-center justify-between mb-3">
+          <div className="flex items-center gap-2.5">
+            <p className="section-label">{t("ml.title", lang)}</p>
             {mlMetrics && (
-              <span className={`tag text-[10px] ${mlMetrics.testAccuracy > 0.52 ? "bg-green-500/10 text-green-400" : "bg-yellow-500/10 text-yellow-400"}`}>
+              <span className={`tag text-[10px] border ${mlMetrics.testAccuracy > 0.52 ? "bg-emerald-500/8 text-emerald-400 border-emerald-500/20" : "bg-amber-500/8 text-amber-400 border-amber-500/20"}`}>
                 Test: {(mlMetrics.testAccuracy * 100).toFixed(0)}%
               </span>
             )}
             {mlPrediction && (
-              <span className={`tag text-[10px] ${mlPrediction.direction === "UP" ? "bg-green-500/10 text-green-400" : "bg-red-500/10 text-red-400"}`}>
+              <span className={`tag text-[10px] border ${mlPrediction.direction === "UP" ? "bg-emerald-500/8 text-emerald-400 border-emerald-500/20" : "bg-red-500/8 text-red-400 border-red-500/20"}`}>
                 {mlPrediction.direction === "UP" ? "↑" : "↓"} {t(mlPrediction.direction === "UP" ? "ml.up" : "ml.down", lang)} {(mlPrediction.confidence * 100).toFixed(0)}%
               </span>
             )}
           </div>
           <button onClick={() => setShowMlPanel((v) => !v)}
-            className="btn-secondary px-2.5 py-1 text-[10px] flex items-center gap-1">
+            className="btn-secondary px-3 py-1.5 text-[10px] flex items-center gap-1.5">
             {showMlPanel ? <ChevronUp className="w-3 h-3" /> : <ChevronDown className="w-3 h-3" />}
             {showMlPanel ? (lang === "ru" ? "Скрыть" : "Hide") : (lang === "ru" ? "Подробнее" : "Details")}
           </button>
         </div>
 
         {showMlPanel && (
-          <div className="space-y-3 mt-2">
+          <div className="space-y-4 mt-3 animate-slide-up">
             {/* Config row */}
-            <div className="grid grid-cols-4 gap-2">
-              <div>
-                <label className="text-[10px] text-gray-500 uppercase">{t("ml.hidden_size", lang)}</label>
-                <select value={mlConfig.hiddenSize} onChange={(e) => setMlConfig((c) => ({ ...c, hiddenSize: Number(e.target.value) }))}
-                  className="w-full mt-0.5 bg-[#12141c] border border-gray-800 rounded px-1.5 py-1 text-xs text-gray-300 focus:outline-none">
-                  <option value={16}>16</option><option value={32}>32</option><option value={64}>64</option>
-                </select>
-              </div>
-              <div>
-                <label className="text-[10px] text-gray-500 uppercase">{t("ml.epochs", lang)}</label>
-                <select value={mlConfig.epochs} onChange={(e) => setMlConfig((c) => ({ ...c, epochs: Number(e.target.value) }))}
-                  className="w-full mt-0.5 bg-[#12141c] border border-gray-800 rounded px-1.5 py-1 text-xs text-gray-300 focus:outline-none">
-                  <option value={50}>50</option><option value={100}>100</option><option value={200}>200</option>
-                </select>
-              </div>
-              <div>
-                <label className="text-[10px] text-gray-500 uppercase">{t("ml.lookback", lang)}</label>
-                <select value={mlConfig.lookback} onChange={(e) => setMlConfig((c) => ({ ...c, lookback: Number(e.target.value) }))}
-                  className="w-full mt-0.5 bg-[#12141c] border border-gray-800 rounded px-1.5 py-1 text-xs text-gray-300 focus:outline-none">
-                  <option value={7}>7</option><option value={14}>14</option><option value={21}>21</option>
-                </select>
-              </div>
+            <div className="grid grid-cols-4 gap-3">
+              {[
+                { label: t("ml.hidden_size", lang), value: mlConfig.hiddenSize, setter: (v: number) => setMlConfig((c) => ({ ...c, hiddenSize: v })), options: [16, 32, 64] },
+                { label: t("ml.epochs", lang), value: mlConfig.epochs, setter: (v: number) => setMlConfig((c) => ({ ...c, epochs: v })), options: [50, 100, 200] },
+                { label: t("ml.lookback", lang), value: mlConfig.lookback, setter: (v: number) => setMlConfig((c) => ({ ...c, lookback: v })), options: [7, 14, 21] },
+              ].map((cfg) => (
+                <div key={cfg.label}>
+                  <label className="section-label">{cfg.label}</label>
+                  <select value={cfg.value} onChange={(e) => cfg.setter(Number(e.target.value))}
+                    className="w-full mt-1.5 bg-[#0c0e16] border border-white/[0.06] rounded-lg px-2.5 py-2 text-xs text-[#e5e7eb] focus:outline-none focus:border-emerald-500/30 transition-colors">
+                    {cfg.options.map((o) => <option key={o} value={o}>{o}</option>)}
+                  </select>
+                </div>
+              ))}
               <div className="flex items-end">
                 <button onClick={handleTrainML} disabled={mlTraining}
-                  className="btn-primary px-3 py-1.5 text-xs w-full flex items-center justify-center gap-1 disabled:opacity-50">
+                  className="btn-primary px-4 py-2 text-xs w-full flex items-center justify-center gap-1.5 disabled:opacity-40">
                   {mlTraining ? (
                     <><Loader2 className="w-3.5 h-3.5 animate-spin" />{mlProgress ? `${mlProgress.epoch}/${mlProgress.totalEpochs}` : t("ml.training", lang)}</>
-                  ) : (
-                    <>{t("ml.train", lang)}</>
-                  )}
+                  ) : t("ml.train", lang)}
                 </button>
               </div>
             </div>
@@ -1884,62 +1854,49 @@ export default function Home() {
             {/* Training progress */}
             {mlTraining && mlProgress && (
               <div>
-                <div className="flex justify-between text-[10px] text-gray-500 mb-1">
+                <div className="flex justify-between text-[10px] text-[#6b7280] mb-1.5">
                   <span>{t("ml.progress", lang)}: {mlProgress.epoch}/{mlProgress.totalEpochs}</span>
-                  <span>Loss: {mlProgress.trainLoss.toFixed(4)} | Train: {(mlProgress.trainAcc * 100).toFixed(0)}% | Test: {(mlProgress.testAcc * 100).toFixed(0)}%</span>
+                  <span className="stat-value">Loss: {mlProgress.trainLoss.toFixed(4)} | Train: {(mlProgress.trainAcc * 100).toFixed(0)}% | Test: {(mlProgress.testAcc * 100).toFixed(0)}%</span>
                 </div>
-                <div className="w-full bg-[#12141c] rounded-full h-1.5">
-                  <div className="bg-blue-500 rounded-full h-1.5 transition-all" style={{ width: `${(mlProgress.epoch / mlProgress.totalEpochs) * 100}%` }} />
+                <div className="progress-track">
+                  <div className="progress-fill bg-gradient-to-r from-blue-500 to-cyan-400" style={{ width: `${(mlProgress.epoch / mlProgress.totalEpochs) * 100}%` }} />
                 </div>
               </div>
             )}
 
             {/* Results */}
             {mlMetrics && (
-              <div className="space-y-3">
-                {/* Metrics grid */}
+              <div className="space-y-4">
                 <div className="grid grid-cols-5 gap-2">
-                  <div className="bg-[#12141c] rounded-lg p-2 text-center">
-                    <p className="text-[10px] text-gray-500 uppercase">{t("ml.train_acc", lang)}</p>
-                    <p className={`text-sm font-bold ${mlMetrics.trainAccuracy > 0.55 ? "text-green-400" : "text-yellow-400"}`}>
-                      {(mlMetrics.trainAccuracy * 100).toFixed(1)}%
-                    </p>
-                  </div>
-                  <div className="bg-[#12141c] rounded-lg p-2 text-center">
-                    <p className="text-[10px] text-gray-500 uppercase">{t("ml.test_acc", lang)}</p>
-                    <p className={`text-sm font-bold ${mlMetrics.testAccuracy > 0.52 ? "text-green-400" : "text-red-400"}`}>
-                      {(mlMetrics.testAccuracy * 100).toFixed(1)}%
-                    </p>
-                  </div>
-                  <div className="bg-[#12141c] rounded-lg p-2 text-center">
-                    <p className="text-[10px] text-gray-500 uppercase">{t("ml.samples", lang)}</p>
-                    <p className="text-sm font-bold text-gray-200">{mlMetrics.totalSamples}</p>
-                  </div>
-                  <div className="bg-[#12141c] rounded-lg p-2 text-center">
-                    <p className="text-[10px] text-gray-500 uppercase">{t("ml.epochs", lang)}</p>
-                    <p className="text-sm font-bold text-gray-200">{mlMetrics.epochsRun}</p>
-                  </div>
-                  <div className="bg-[#12141c] rounded-lg p-2 text-center">
-                    <p className="text-[10px] text-gray-500 uppercase">{t("ml.loss", lang)}</p>
-                    <p className="text-sm font-bold text-gray-200">{mlMetrics.trainLoss.toFixed(4)}</p>
-                  </div>
+                  {[
+                    { label: t("ml.train_acc", lang), value: `${(mlMetrics.trainAccuracy * 100).toFixed(1)}%`, color: mlMetrics.trainAccuracy > 0.55 ? "text-emerald-400" : "text-amber-400" },
+                    { label: t("ml.test_acc", lang), value: `${(mlMetrics.testAccuracy * 100).toFixed(1)}%`, color: mlMetrics.testAccuracy > 0.52 ? "text-emerald-400" : "text-red-400" },
+                    { label: t("ml.samples", lang), value: `${mlMetrics.totalSamples}`, color: "text-[#e5e7eb]" },
+                    { label: t("ml.epochs", lang), value: `${mlMetrics.epochsRun}`, color: "text-[#e5e7eb]" },
+                    { label: t("ml.loss", lang), value: mlMetrics.trainLoss.toFixed(4), color: "text-[#e5e7eb]" },
+                  ].map((m) => (
+                    <div key={m.label} className="data-cell">
+                      <p className="text-[9px] text-[#4b5563] uppercase mb-0.5">{m.label}</p>
+                      <p className={`text-sm font-bold stat-value ${m.color}`}>{m.value}</p>
+                    </div>
+                  ))}
                 </div>
 
                 {/* Current prediction */}
                 {mlPrediction && (
-                  <div className={`rounded-lg p-3 border ${mlPrediction.direction === "UP" ? "bg-green-500/5 border-green-500/20" : "bg-red-500/5 border-red-500/20"}`}>
+                  <div className={`rounded-xl p-4 border ${mlPrediction.direction === "UP" ? "bg-emerald-500/5 border-emerald-500/15" : "bg-red-500/5 border-red-500/15"}`}>
                     <div className="flex items-center justify-between">
-                      <div className="flex items-center gap-2">
-                        <span className={`text-lg font-bold ${mlPrediction.direction === "UP" ? "text-green-400" : "text-red-400"}`}>
+                      <div className="flex items-center gap-3">
+                        <span className={`text-xl font-extrabold ${mlPrediction.direction === "UP" ? "text-emerald-400" : "text-red-400"}`}>
                           {mlPrediction.direction === "UP" ? "↑" : "↓"} {t(mlPrediction.direction === "UP" ? "ml.up" : "ml.down", lang)}
                         </span>
-                        <span className="text-xs text-gray-400">
-                          {t("ml.confidence", lang)}: {(mlPrediction.confidence * 100).toFixed(0)}%
+                        <span className="text-xs text-[#6b7280]">
+                          {t("ml.confidence", lang)}: <span className="font-semibold text-[#e5e7eb]">{(mlPrediction.confidence * 100).toFixed(0)}%</span>
                         </span>
                       </div>
                       <div className="text-right">
-                        <p className="text-[10px] text-gray-500 uppercase">{t("ml.target", lang)}</p>
-                        <p className="text-sm font-mono text-gray-200">${fmtUSD(mlPrediction.priceTarget)}</p>
+                        <p className="text-[9px] text-[#4b5563] uppercase">{t("ml.target", lang)}</p>
+                        <p className="text-sm stat-value text-[#e5e7eb] font-bold">${fmtUSD(mlPrediction.priceTarget)}</p>
                       </div>
                     </div>
                   </div>
@@ -1948,47 +1905,47 @@ export default function Home() {
                 {/* Ensemble model votes */}
                 {mlMetrics.modelVotes && mlMetrics.modelVotes.length > 0 && (
                   <div>
-                    <div className="flex items-center justify-between mb-1.5">
-                      <p className="text-[10px] text-gray-500 uppercase">Ensemble Models</p>
+                    <div className="flex items-center justify-between mb-2">
+                      <p className="text-[10px] text-[#4b5563] font-semibold uppercase">Ensemble Models</p>
                       {mlMetrics.ensembleAccuracy !== undefined && (
-                        <span className={`text-[10px] font-medium ${mlMetrics.ensembleAccuracy > 0.52 ? "text-green-400" : "text-yellow-400"}`}>
+                        <span className={`text-[10px] font-semibold ${mlMetrics.ensembleAccuracy > 0.52 ? "text-emerald-400" : "text-amber-400"}`}>
                           Ensemble: {(mlMetrics.ensembleAccuracy * 100).toFixed(0)}%
                         </span>
                       )}
                     </div>
-                    <div className="grid grid-cols-4 gap-1.5">
+                    <div className="grid grid-cols-4 gap-2">
                       {mlMetrics.modelVotes.map((mv) => (
-                        <div key={mv.model} className="bg-[#12141c] rounded-lg p-2 text-center">
-                          <p className="text-[10px] text-gray-500 truncate">{mv.model}</p>
-                          <p className={`text-xs font-bold ${mv.accuracy > 0.52 ? "text-green-400" : mv.accuracy > 0.48 ? "text-yellow-400" : "text-red-400"}`}>
+                        <div key={mv.model} className="data-cell">
+                          <p className="text-[10px] text-[#6b7280] truncate">{mv.model}</p>
+                          <p className={`text-xs font-bold stat-value ${mv.accuracy > 0.52 ? "text-emerald-400" : mv.accuracy > 0.48 ? "text-amber-400" : "text-red-400"}`}>
                             {(mv.accuracy * 100).toFixed(0)}%
                           </p>
-                          <div className="w-full bg-gray-800 rounded-full h-1 mt-1">
-                            <div className="bg-blue-500/60 rounded-full h-1" style={{ width: `${mv.weight * 100}%` }} />
+                          <div className="w-full bg-[#0c0e16] rounded-full h-1 mt-1.5">
+                            <div className="bg-blue-500/50 rounded-full h-1 transition-all" style={{ width: `${mv.weight * 100}%` }} />
                           </div>
-                          <p className="text-[9px] text-gray-600 mt-0.5">w: {(mv.weight * 100).toFixed(0)}%</p>
+                          <p className="text-[9px] text-[#3d4254] mt-0.5">w: {(mv.weight * 100).toFixed(0)}%</p>
                         </div>
                       ))}
                     </div>
                   </div>
                 )}
 
-                {/* Ensemble vote breakdown for current prediction */}
+                {/* Ensemble vote breakdown */}
                 {mlPrediction?.ensemble && (
-                  <div className="grid grid-cols-4 gap-1.5">
+                  <div className="grid grid-cols-4 gap-2">
                     {[
                       { label: "NN", value: mlPrediction.ensemble.nnVote },
                       { label: "Momentum", value: mlPrediction.ensemble.momentumVote },
                       { label: "Mean Rev", value: mlPrediction.ensemble.meanRevVote },
                       { label: "Trend", value: mlPrediction.ensemble.trendVote },
                     ].map((v) => (
-                      <div key={v.label} className="flex items-center gap-1">
-                        <span className="text-[9px] text-gray-600 w-14 shrink-0">{v.label}</span>
-                        <div className="flex-1 bg-gray-800 rounded-full h-1.5 relative">
-                          <div className={`absolute top-0 h-1.5 rounded-full ${v.value > 0.5 ? "bg-green-500/50" : "bg-red-500/50"}`}
+                      <div key={v.label} className="flex items-center gap-1.5">
+                        <span className="text-[9px] text-[#4b5563] w-14 shrink-0 font-medium">{v.label}</span>
+                        <div className="flex-1 bg-[#0c0e16] rounded-full h-2 relative overflow-hidden">
+                          <div className={`absolute top-0 h-2 rounded-full transition-all ${v.value > 0.5 ? "bg-emerald-500/40" : "bg-red-500/40"}`}
                             style={{ width: `${Math.abs(v.value - 0.5) * 200}%`, left: v.value > 0.5 ? "50%" : `${v.value * 100}%` }} />
                         </div>
-                        <span className={`text-[9px] w-6 text-right ${v.value > 0.5 ? "text-green-400" : "text-red-400"}`}>
+                        <span className={`text-[9px] w-6 text-right font-bold ${v.value > 0.5 ? "text-emerald-400" : "text-red-400"}`}>
                           {v.value > 0.5 ? "↑" : "↓"}
                         </span>
                       </div>
@@ -1998,36 +1955,36 @@ export default function Home() {
 
                 {/* Feature importance */}
                 <div>
-                  <p className="text-[10px] text-gray-500 uppercase mb-1.5">{t("ml.features", lang)}</p>
-                  <div className="grid grid-cols-2 gap-1">
+                  <p className="text-[10px] text-[#4b5563] font-semibold uppercase mb-2">{t("ml.features", lang)}</p>
+                  <div className="grid grid-cols-2 gap-1.5">
                     {mlMetrics.featureImportance.slice(0, 8).map((f) => (
-                      <div key={f.name} className="flex items-center gap-1.5">
-                        <div className="flex-1 bg-[#12141c] rounded-full h-1.5">
-                          <div className="bg-blue-500/60 rounded-full h-1.5" style={{ width: `${f.importance * 100}%` }} />
+                      <div key={f.name} className="flex items-center gap-2">
+                        <div className="flex-1 bg-[#0c0e16] rounded-full h-1.5 overflow-hidden">
+                          <div className="bg-gradient-to-r from-blue-500/50 to-cyan-400/50 rounded-full h-1.5 transition-all" style={{ width: `${f.importance * 100}%` }} />
                         </div>
-                        <span className="text-[10px] text-gray-500 w-20 shrink-0">{f.name}</span>
-                        <span className="text-[10px] text-gray-400 w-8 text-right">{(f.importance * 100).toFixed(0)}%</span>
+                        <span className="text-[10px] text-[#6b7280] w-20 shrink-0">{f.name}</span>
+                        <span className="text-[10px] text-[#9ca3af] stat-value w-8 text-right">{(f.importance * 100).toFixed(0)}%</span>
                       </div>
                     ))}
                   </div>
                 </div>
 
-                {/* Test predictions (last 10) */}
+                {/* Test predictions */}
                 {mlMetrics.predictions.length > 0 && (
                   <div>
-                    <p className="text-[10px] text-gray-500 uppercase mb-1.5">{t("ml.predictions", lang)} ({mlMetrics.predictions.filter((p) => p.actual === p.predicted).length}/{mlMetrics.predictions.length})</p>
-                    <div className="flex gap-0.5 flex-wrap">
+                    <p className="text-[10px] text-[#4b5563] font-semibold uppercase mb-2">{t("ml.predictions", lang)} ({mlMetrics.predictions.filter((p) => p.actual === p.predicted).length}/{mlMetrics.predictions.length})</p>
+                    <div className="flex gap-1 flex-wrap">
                       {mlMetrics.predictions.slice(-30).map((p, i) => (
-                        <div key={i} className={`w-3 h-3 rounded-sm ${p.actual === p.predicted ? "bg-green-500/40" : "bg-red-500/40"}`}
+                        <div key={i} className={`w-3.5 h-3.5 rounded ${p.actual === p.predicted ? "bg-emerald-500/30" : "bg-red-500/30"}`}
                           title={`${p.predicted} ${p.actual === p.predicted ? "✓" : "✗"} (${(p.confidence * 100).toFixed(0)}%)`} />
                       ))}
                     </div>
-                    <div className="flex gap-3 mt-1">
-                      <span className="text-[10px] text-gray-600 flex items-center gap-1">
-                        <div className="w-2 h-2 rounded-sm bg-green-500/40" /> {t("ml.correct", lang)}
+                    <div className="flex gap-4 mt-2">
+                      <span className="text-[10px] text-[#4b5563] flex items-center gap-1.5">
+                        <div className="w-2.5 h-2.5 rounded bg-emerald-500/30" /> {t("ml.correct", lang)}
                       </span>
-                      <span className="text-[10px] text-gray-600 flex items-center gap-1">
-                        <div className="w-2 h-2 rounded-sm bg-red-500/40" /> {t("ml.wrong", lang)}
+                      <span className="text-[10px] text-[#4b5563] flex items-center gap-1.5">
+                        <div className="w-2.5 h-2.5 rounded bg-red-500/30" /> {t("ml.wrong", lang)}
                       </span>
                     </div>
                   </div>
@@ -2036,63 +1993,65 @@ export default function Home() {
             )}
 
             {!mlMetrics && !mlTraining && (
-              <p className="text-xs text-gray-600 text-center py-2">{t("ml.not_trained", lang)}</p>
+              <div className="text-center py-6">
+                <p className="text-xs text-[#4b5563]">{t("ml.not_trained", lang)}</p>
+              </div>
             )}
           </div>
         )}
       </div>
 
       {/* BACKTESTING SECTION */}
-      <div className="card p-4 mt-3">
+      <div className="card p-5 mt-4">
         <div className="flex items-center justify-between mb-3">
-          <div className="flex items-center gap-2">
-            <p className="text-xs text-gray-500 uppercase tracking-wide font-semibold">{t("bt.title", lang)}</p>
-            <span className="tag bg-orange-500/10 text-orange-400 text-[10px]">
+          <div className="flex items-center gap-2.5">
+            <p className="section-label">{t("bt.title", lang)}</p>
+            <span className="tag bg-amber-500/8 text-amber-400 text-[10px] border border-amber-500/20">
               {lang === "ru" ? "Тест стратегии" : "Strategy Test"}
             </span>
           </div>
           <button onClick={() => setShowBacktest((v) => !v)}
-            className="btn-secondary px-2.5 py-1 text-[10px] flex items-center gap-1">
+            className="btn-secondary px-3 py-1.5 text-[10px] flex items-center gap-1.5">
             {showBacktest ? <ChevronUp className="w-3 h-3" /> : <ChevronDown className="w-3 h-3" />}
             {showBacktest ? (lang === "ru" ? "Скрыть" : "Hide") : (lang === "ru" ? "Показать" : "Show")}
           </button>
         </div>
 
         {showBacktest && (
-          <div className="space-y-4">
+          <div className="space-y-4 animate-slide-up">
             {/* Config controls */}
             <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
               <div>
-                <label className="text-[10px] text-gray-500 uppercase tracking-wide">{t("bt.period", lang)}</label>
-                <div className="flex gap-1 mt-1">
+                <label className="section-label">{t("bt.period", lang)}</label>
+                <div className="flex gap-1.5 mt-2">
                   {[30, 60, 90].map((d) => (
                     <button key={d}
                       onClick={() => setBacktestConfig((c) => ({ ...c, days: d }))}
-                      className={`px-2 py-1 rounded text-xs font-mono ${backtestConfig.days === d ? "bg-orange-500/20 text-orange-400 border border-orange-500/30" : "bg-[#12141c] text-gray-500 hover:text-gray-300"}`}>
+                      className={`flex-1 px-2.5 py-2 rounded-lg text-xs stat-value transition-all border ${backtestConfig.days === d ? "bg-amber-500/10 text-amber-400 border-amber-500/20 shadow-sm shadow-amber-500/10" : "bg-[#0c0e16] text-[#6b7280] border-transparent hover:border-white/[0.06]"}`}>
                       {d}{t("bt.days", lang).charAt(0)}
                     </button>
                   ))}
                 </div>
               </div>
               <div>
-                <label className="text-[10px] text-gray-500 uppercase tracking-wide">{t("bt.capital", lang)}</label>
-                <div className="flex gap-1 mt-1">
+                <label className="section-label">{t("bt.capital", lang)}</label>
+                <div className="flex gap-1.5 mt-2">
                   {[1000, 5000, 10000].map((c) => (
                     <button key={c}
                       onClick={() => setBacktestConfig((cfg) => ({ ...cfg, initialCapital: c }))}
-                      className={`px-2 py-1 rounded text-xs font-mono ${backtestConfig.initialCapital === c ? "bg-orange-500/20 text-orange-400 border border-orange-500/30" : "bg-[#12141c] text-gray-500 hover:text-gray-300"}`}>
+                      className={`flex-1 px-2.5 py-2 rounded-lg text-xs stat-value transition-all border ${backtestConfig.initialCapital === c ? "bg-amber-500/10 text-amber-400 border-amber-500/20 shadow-sm shadow-amber-500/10" : "bg-[#0c0e16] text-[#6b7280] border-transparent hover:border-white/[0.06]"}`}>
                       ${c >= 1000 ? `${c / 1000}k` : c}
                     </button>
                   ))}
                 </div>
               </div>
               <div>
-                <label className="text-[10px] text-gray-500 uppercase tracking-wide">{t("bt.strategy_label", lang)}</label>
-                <div className="flex gap-1 mt-1">
+                <label className="section-label">{t("bt.strategy_label", lang)}</label>
+                <div className="flex gap-1.5 mt-2">
                   {[0, 1, 2].map((s) => (
                     <button key={s}
                       onClick={() => setBacktestConfig((c) => ({ ...c, strategy: s }))}
-                      className={`px-2 py-1 rounded text-xs ${backtestConfig.strategy === s ? "bg-orange-500/20 text-orange-400 border border-orange-500/30" : "bg-[#12141c] text-gray-500 hover:text-gray-300"}`}>
+                      className={`flex-1 px-2.5 py-2 rounded-lg text-xs transition-all border ${backtestConfig.strategy === s ? "bg-amber-500/10 text-amber-400 border-amber-500/20 shadow-sm shadow-amber-500/10" : "bg-[#0c0e16] text-[#6b7280] border-transparent hover:border-white/[0.06]"}`}>
                       {getStrategyName(s, lang)}
                     </button>
                   ))}
@@ -2100,7 +2059,7 @@ export default function Home() {
               </div>
               <div className="flex items-end">
                 <button onClick={handleRunBacktest} disabled={backtestRunning}
-                  className="btn-primary px-4 py-1.5 text-xs w-full flex items-center justify-center gap-1.5 disabled:opacity-50">
+                  className="btn-primary px-4 py-2 text-xs w-full flex items-center justify-center gap-2 disabled:opacity-40">
                   {backtestRunning ? (
                     <><Loader2 className="w-3.5 h-3.5 animate-spin" />{t("bt.running", lang)} {backtestProgress}%</>
                   ) : (
@@ -2112,116 +2071,56 @@ export default function Home() {
 
             {/* Progress bar */}
             {backtestRunning && (
-              <div className="h-1.5 bg-gray-800 rounded-full overflow-hidden">
-                <div className="h-full bg-orange-500 rounded-full transition-all duration-300" style={{ width: `${backtestProgress}%` }} />
+              <div className="progress-track">
+                <div className="progress-fill bg-gradient-to-r from-amber-500 to-orange-400" style={{ width: `${backtestProgress}%` }} />
               </div>
             )}
 
             {/* Results */}
             {backtestResult && (
-              <div className="space-y-3">
+              <div className="space-y-4">
                 {/* Key metrics grid */}
                 <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-2">
-                  {/* Total Return */}
-                  <div className="bg-[#12141c] rounded-lg p-2.5 text-center">
-                    <p className="text-[9px] text-gray-600 uppercase">{t("bt.total_return", lang)}</p>
-                    <p className={`text-lg font-bold font-mono ${backtestResult.metrics.totalReturn >= 0 ? "text-green-400" : "text-red-400"}`}>
-                      {backtestResult.metrics.totalReturn >= 0 ? "+" : ""}{backtestResult.metrics.totalReturn.toFixed(2)}%
-                    </p>
-                    <p className={`text-[10px] font-mono ${backtestResult.metrics.totalReturnUSD >= 0 ? "text-green-600" : "text-red-600"}`}>
-                      {backtestResult.metrics.totalReturnUSD >= 0 ? "+" : ""}${fmtUSD(Math.abs(backtestResult.metrics.totalReturnUSD))}
-                    </p>
-                  </div>
-                  {/* Win Rate */}
-                  <div className="bg-[#12141c] rounded-lg p-2.5 text-center">
-                    <p className="text-[9px] text-gray-600 uppercase">{t("bt.win_rate", lang)}</p>
-                    <p className={`text-lg font-bold font-mono ${backtestResult.metrics.winRate >= 50 ? "text-green-400" : "text-red-400"}`}>
-                      {backtestResult.metrics.winRate.toFixed(1)}%
-                    </p>
-                    <p className="text-[10px] text-gray-600">
-                      {backtestResult.metrics.winningTrades}W / {backtestResult.metrics.losingTrades}L
-                    </p>
-                  </div>
-                  {/* Max Drawdown */}
-                  <div className="bg-[#12141c] rounded-lg p-2.5 text-center">
-                    <p className="text-[9px] text-gray-600 uppercase">{t("bt.max_drawdown", lang)}</p>
-                    <p className="text-lg font-bold font-mono text-red-400">
-                      -{backtestResult.metrics.maxDrawdown.toFixed(2)}%
-                    </p>
-                    <p className="text-[10px] text-red-600 font-mono">
-                      -${fmtUSD(backtestResult.metrics.maxDrawdownUSD)}
-                    </p>
-                  </div>
-                  {/* Sharpe */}
-                  <div className="bg-[#12141c] rounded-lg p-2.5 text-center">
-                    <p className="text-[9px] text-gray-600 uppercase">{t("bt.sharpe", lang)}</p>
-                    <p className={`text-lg font-bold font-mono ${backtestResult.metrics.sharpeRatio >= 1 ? "text-green-400" : backtestResult.metrics.sharpeRatio >= 0 ? "text-yellow-400" : "text-red-400"}`}>
-                      {backtestResult.metrics.sharpeRatio.toFixed(2)}
-                    </p>
-                    <p className="text-[10px] text-gray-600">
-                      {backtestResult.metrics.sharpeRatio >= 2 ? "Excellent" : backtestResult.metrics.sharpeRatio >= 1 ? "Good" : backtestResult.metrics.sharpeRatio >= 0 ? "OK" : "Poor"}
-                    </p>
-                  </div>
-                  {/* Profit Factor */}
-                  <div className="bg-[#12141c] rounded-lg p-2.5 text-center">
-                    <p className="text-[9px] text-gray-600 uppercase">{t("bt.profit_factor", lang)}</p>
-                    <p className={`text-lg font-bold font-mono ${backtestResult.metrics.profitFactor >= 1.5 ? "text-green-400" : backtestResult.metrics.profitFactor >= 1 ? "text-yellow-400" : "text-red-400"}`}>
-                      {backtestResult.metrics.profitFactor === Infinity ? "∞" : backtestResult.metrics.profitFactor.toFixed(2)}
-                    </p>
-                    <p className="text-[10px] text-gray-600">{t("bt.total_trades", lang)}: {backtestResult.metrics.totalTrades}</p>
-                  </div>
-                  {/* Final Capital */}
-                  <div className="bg-[#12141c] rounded-lg p-2.5 text-center">
-                    <p className="text-[9px] text-gray-600 uppercase">{t("bt.final_capital", lang)}</p>
-                    <p className="text-lg font-bold font-mono text-white">
-                      ${fmtUSD(backtestResult.finalCapital)}
-                    </p>
-                    <p className="text-[10px] text-gray-600">
-                      {backtestResult.durationDays} {t("bt.days", lang)}
-                    </p>
-                  </div>
+                  {[
+                    { label: t("bt.total_return", lang), value: `${backtestResult.metrics.totalReturn >= 0 ? "+" : ""}${backtestResult.metrics.totalReturn.toFixed(2)}%`, color: backtestResult.metrics.totalReturn >= 0 ? "text-emerald-400" : "text-red-400", sub: `${backtestResult.metrics.totalReturnUSD >= 0 ? "+" : ""}$${fmtUSD(Math.abs(backtestResult.metrics.totalReturnUSD))}` },
+                    { label: t("bt.win_rate", lang), value: `${backtestResult.metrics.winRate.toFixed(1)}%`, color: backtestResult.metrics.winRate >= 50 ? "text-emerald-400" : "text-red-400", sub: `${backtestResult.metrics.winningTrades}W / ${backtestResult.metrics.losingTrades}L` },
+                    { label: t("bt.max_drawdown", lang), value: `-${backtestResult.metrics.maxDrawdown.toFixed(2)}%`, color: "text-red-400", sub: `-$${fmtUSD(backtestResult.metrics.maxDrawdownUSD)}` },
+                    { label: t("bt.sharpe", lang), value: backtestResult.metrics.sharpeRatio.toFixed(2), color: backtestResult.metrics.sharpeRatio >= 1 ? "text-emerald-400" : backtestResult.metrics.sharpeRatio >= 0 ? "text-amber-400" : "text-red-400", sub: backtestResult.metrics.sharpeRatio >= 2 ? "Excellent" : backtestResult.metrics.sharpeRatio >= 1 ? "Good" : backtestResult.metrics.sharpeRatio >= 0 ? "OK" : "Poor" },
+                    { label: t("bt.profit_factor", lang), value: backtestResult.metrics.profitFactor === Infinity ? "∞" : backtestResult.metrics.profitFactor.toFixed(2), color: backtestResult.metrics.profitFactor >= 1.5 ? "text-emerald-400" : backtestResult.metrics.profitFactor >= 1 ? "text-amber-400" : "text-red-400", sub: `${t("bt.total_trades", lang)}: ${backtestResult.metrics.totalTrades}` },
+                    { label: t("bt.final_capital", lang), value: `$${fmtUSD(backtestResult.finalCapital)}`, color: "text-white", sub: `${backtestResult.durationDays} ${t("bt.days", lang)}` },
+                  ].map((m) => (
+                    <div key={m.label} className="data-cell">
+                      <p className="text-[9px] text-[#4b5563] uppercase mb-0.5">{m.label}</p>
+                      <p className={`text-lg font-extrabold stat-value ${m.color}`}>{m.value}</p>
+                      <p className="text-[10px] text-[#4b5563] mt-0.5">{m.sub}</p>
+                    </div>
+                  ))}
                 </div>
 
                 {/* Secondary metrics */}
-                <div className="grid grid-cols-3 md:grid-cols-6 gap-1.5">
-                  <div className="bg-[#12141c] rounded px-2 py-1.5 text-center">
-                    <p className="text-[9px] text-gray-600">{t("bt.annual_return", lang)}</p>
-                    <p className={`text-xs font-mono font-bold ${backtestResult.metrics.annualizedReturn >= 0 ? "text-green-400" : "text-red-400"}`}>
-                      {backtestResult.metrics.annualizedReturn >= 0 ? "+" : ""}{backtestResult.metrics.annualizedReturn.toFixed(1)}%
-                    </p>
-                  </div>
-                  <div className="bg-[#12141c] rounded px-2 py-1.5 text-center">
-                    <p className="text-[9px] text-gray-600">{t("bt.sortino", lang)}</p>
-                    <p className={`text-xs font-mono font-bold ${backtestResult.metrics.sortinoRatio >= 1 ? "text-green-400" : "text-yellow-400"}`}>
-                      {backtestResult.metrics.sortinoRatio.toFixed(2)}
-                    </p>
-                  </div>
-                  <div className="bg-[#12141c] rounded px-2 py-1.5 text-center">
-                    <p className="text-[9px] text-gray-600">{t("bt.avg_win", lang)}</p>
-                    <p className="text-xs font-mono font-bold text-green-400">${fmtUSD(backtestResult.metrics.avgWinUSD)}</p>
-                  </div>
-                  <div className="bg-[#12141c] rounded px-2 py-1.5 text-center">
-                    <p className="text-[9px] text-gray-600">{t("bt.avg_loss", lang)}</p>
-                    <p className="text-xs font-mono font-bold text-red-400">${fmtUSD(backtestResult.metrics.avgLossUSD)}</p>
-                  </div>
-                  <div className="bg-[#12141c] rounded px-2 py-1.5 text-center">
-                    <p className="text-[9px] text-gray-600">{t("bt.best_trade", lang)}</p>
-                    <p className="text-xs font-mono font-bold text-green-400">+{backtestResult.metrics.bestTrade.toFixed(1)}%</p>
-                  </div>
-                  <div className="bg-[#12141c] rounded px-2 py-1.5 text-center">
-                    <p className="text-[9px] text-gray-600">{t("bt.worst_trade", lang)}</p>
-                    <p className="text-xs font-mono font-bold text-red-400">{backtestResult.metrics.worstTrade.toFixed(1)}%</p>
-                  </div>
+                <div className="grid grid-cols-3 md:grid-cols-6 gap-2">
+                  {[
+                    { label: t("bt.annual_return", lang), value: `${backtestResult.metrics.annualizedReturn >= 0 ? "+" : ""}${backtestResult.metrics.annualizedReturn.toFixed(1)}%`, color: backtestResult.metrics.annualizedReturn >= 0 ? "text-emerald-400" : "text-red-400" },
+                    { label: t("bt.sortino", lang), value: backtestResult.metrics.sortinoRatio.toFixed(2), color: backtestResult.metrics.sortinoRatio >= 1 ? "text-emerald-400" : "text-amber-400" },
+                    { label: t("bt.avg_win", lang), value: `$${fmtUSD(backtestResult.metrics.avgWinUSD)}`, color: "text-emerald-400" },
+                    { label: t("bt.avg_loss", lang), value: `$${fmtUSD(backtestResult.metrics.avgLossUSD)}`, color: "text-red-400" },
+                    { label: t("bt.best_trade", lang), value: `+${backtestResult.metrics.bestTrade.toFixed(1)}%`, color: "text-emerald-400" },
+                    { label: t("bt.worst_trade", lang), value: `${backtestResult.metrics.worstTrade.toFixed(1)}%`, color: "text-red-400" },
+                  ].map((m) => (
+                    <div key={m.label} className="data-cell">
+                      <p className="text-[9px] text-[#4b5563] mb-0.5">{m.label}</p>
+                      <p className={`text-xs font-bold stat-value ${m.color}`}>{m.value}</p>
+                    </div>
+                  ))}
                 </div>
 
-                {/* Equity Curve (simple text-based visualization) */}
+                {/* Equity Curve */}
                 {backtestResult.equityCurve.length > 0 && (
-                  <div className="bg-[#12141c] rounded-lg p-3">
-                    <p className="text-[10px] text-gray-500 uppercase tracking-wide mb-2">{t("bt.equity_curve", lang)}</p>
-                    <div className="flex items-end gap-px h-24">
+                  <div className="rounded-xl bg-[#0c0e16] border border-white/[0.03] p-4">
+                    <p className="text-[10px] text-[#4b5563] font-semibold uppercase mb-3">{t("bt.equity_curve", lang)}</p>
+                    <div className="flex items-end gap-px h-28">
                       {(() => {
                         const curve = backtestResult.equityCurve;
-                        // Sample ~80 points for display
                         const step = Math.max(1, Math.floor(curve.length / 80));
                         const sampled = curve.filter((_, i) => i % step === 0);
                         const minEq = Math.min(...sampled.map((p) => p.equity));
@@ -2233,7 +2132,7 @@ export default function Home() {
                           const isProfit = pt.equity >= backtestResult.initialCapital;
                           return (
                             <div key={i}
-                              className={`flex-1 min-w-[1px] rounded-t-sm ${isProfit ? "bg-green-500/60" : "bg-red-500/60"}`}
+                              className={`flex-1 min-w-[1px] rounded-t transition-all ${isProfit ? "bg-emerald-500/50" : "bg-red-500/50"}`}
                               style={{ height: `${Math.max(2, h)}%` }}
                               title={`$${pt.equity.toFixed(0)} | ${new Date(pt.timestamp * 1000).toLocaleDateString()}`}
                             />
@@ -2241,9 +2140,9 @@ export default function Home() {
                         });
                       })()}
                     </div>
-                    <div className="flex justify-between mt-1">
-                      <span className="text-[9px] text-gray-700">{backtestResult.startDate.toLocaleDateString()}</span>
-                      <span className="text-[9px] text-gray-700">{backtestResult.endDate.toLocaleDateString()}</span>
+                    <div className="flex justify-between mt-2">
+                      <span className="text-[9px] text-[#3d4254] stat-value">{backtestResult.startDate.toLocaleDateString()}</span>
+                      <span className="text-[9px] text-[#3d4254] stat-value">{backtestResult.endDate.toLocaleDateString()}</span>
                     </div>
                   </div>
                 )}
@@ -2251,21 +2150,21 @@ export default function Home() {
                 {/* Trade Log */}
                 {backtestResult.trades.length > 0 && (
                   <div>
-                    <p className="text-[10px] text-gray-500 uppercase tracking-wide mb-1.5">{t("bt.trade_log", lang)} ({backtestResult.trades.length})</p>
-                    <div className="max-h-40 overflow-y-auto space-y-1">
+                    <p className="text-[10px] text-[#4b5563] font-semibold uppercase mb-2">{t("bt.trade_log", lang)} ({backtestResult.trades.length})</p>
+                    <div className="max-h-44 overflow-y-auto space-y-1.5">
                       {backtestResult.trades.slice(-20).reverse().map((tr, i) => (
-                        <div key={i} className="flex items-center gap-2 bg-[#12141c] rounded px-2.5 py-1.5">
-                          <span className={`text-[9px] font-bold uppercase px-1.5 py-0.5 rounded min-w-[36px] text-center ${
-                            tr.action === "BUY" ? "bg-green-500/15 text-green-400" : "bg-red-500/15 text-red-400"
+                        <div key={i} className="flex items-center gap-2.5 rounded-lg px-3 py-2.5 bg-[#0c0e16] border border-transparent hover:border-white/[0.04] transition-all">
+                          <span className={`text-[9px] font-bold uppercase px-2 py-1 rounded-md min-w-[40px] text-center ${
+                            tr.action === "BUY" ? "bg-emerald-500/12 text-emerald-400" : "bg-red-500/12 text-red-400"
                           }`}>{tr.action}</span>
-                          <span className="text-xs font-mono text-gray-300 min-w-[36px]">{tr.symbol}</span>
-                          <span className="text-[10px] font-mono text-gray-400 flex-1">
+                          <span className="text-xs stat-value text-[#e5e7eb] font-semibold min-w-[40px]">{tr.symbol}</span>
+                          <span className="text-[10px] stat-value text-[#9ca3af] flex-1">
                             ${fmtUSD(tr.amountUSD)} @ ${fmtUSD(tr.price)}
                           </span>
-                          <span className={`text-[10px] font-mono ${tr.confidence >= 0.5 ? "text-green-400" : "text-yellow-400"}`}>
+                          <span className={`text-[10px] stat-value font-semibold ${tr.confidence >= 0.5 ? "text-emerald-400" : "text-amber-400"}`}>
                             {Math.round(tr.confidence * 100)}%
                           </span>
-                          <span className="text-[10px] text-gray-700">
+                          <span className="text-[10px] text-[#3d4254] stat-value">
                             {new Date(tr.timestamp * 1000).toLocaleDateString()}
                           </span>
                         </div>
@@ -2278,7 +2177,10 @@ export default function Home() {
 
             {/* No results state */}
             {!backtestResult && !backtestRunning && (
-              <p className="text-xs text-gray-600 text-center py-4">{t("bt.no_data", lang)}</p>
+              <div className="text-center py-8">
+                <BarChart3 className="w-10 h-10 mx-auto mb-3 text-[#3d4254] opacity-30" />
+                <p className="text-xs text-[#4b5563]">{t("bt.no_data", lang)}</p>
+              </div>
             )}
           </div>
         )}
