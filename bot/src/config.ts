@@ -60,9 +60,9 @@ export const CONFIG = {
 // ==================== STRATEGY RISK PROFILES ====================
 
 export const STRATEGY_PROFILES = [
-  { name: "Conservative", maxPositionPct: 0.15, stopLossPct: 5, takeProfitPct: 10, minConfidence: 0.6 },
-  { name: "Moderate",     maxPositionPct: 0.25, stopLossPct: 8, takeProfitPct: 15, minConfidence: 0.5 },
-  { name: "Aggressive",   maxPositionPct: 0.40, stopLossPct: 12, takeProfitPct: 25, minConfidence: 0.4 },
+  { name: "Conservative", maxPositionPct: 0.15, stopLossPct: 2,  takeProfitPct: 3,  trailingStopPct: 1.5, maxHoldHours: 48, minConfidence: 0.5 },
+  { name: "Moderate",     maxPositionPct: 0.25, stopLossPct: 3,  takeProfitPct: 5,  trailingStopPct: 2,   maxHoldHours: 24, minConfidence: 0.35 },
+  { name: "Aggressive",   maxPositionPct: 0.40, stopLossPct: 5,  takeProfitPct: 8,  trailingStopPct: 3,   maxHoldHours: 12, minConfidence: 0.25 },
 ];
 
 export function getStrategyProfile() {

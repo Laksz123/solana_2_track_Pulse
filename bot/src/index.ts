@@ -21,6 +21,8 @@ interface Position {
   currentPrice: number;
   unrealizedPnL: number;
   unrealizedPnLPct: number;
+  peakPrice: number;     // highest price since entry (for trailing stop)
+  openedAt: number;      // timestamp when position was opened
 }
 
 interface TradeRecord {
@@ -218,33 +220,114 @@ function makeDecision(
   state: BotState,
 ): TradeDecision {
   const profile = getStrategyProfile();
-  const { compositeScore, rsi, macdHist } = analysis;
+  const { compositeScore, rsi } = analysis;
   const position = state.positions.find((p) => p.coinId === asset.id);
 
   // Confidence from composite score
-  const confidence = Math.min(1, Math.abs(compositeScore) * 1.2 + 0.1);
+  const confidence = Math.min(1, Math.abs(compositeScore) * 1.5 + 0.15);
 
+  const totalEquity = state.cashUSD + state.positions.reduce((s, p) => s + p.amount * p.currentPrice, 0);
+
+  // ==================== SELL LOGIC (check FIRST — protect capital) ====================
+  if (position) {
+    const pnlPct = position.avgBuyPrice > 0
+      ? ((asset.currentPrice - position.avgBuyPrice) / position.avgBuyPrice) * 100
+      : 0;
+    const posValue = position.amount * asset.currentPrice;
+    const holdHours = position.openedAt ? (Date.now() - position.openedAt) / (1000 * 60 * 60) : 0;
+    const dropFromPeak = position.peakPrice > 0
+      ? ((position.peakPrice - asset.currentPrice) / position.peakPrice) * 100
+      : 0;
+
+    // 1. STOP LOSS — immediate full exit
+    if (pnlPct <= -profile.stopLossPct) {
+      return {
+        action: "SELL", coinId: asset.id, symbol: asset.symbol,
+        amountUSD: posValue, confidence: 0.95, currentPrice: asset.currentPrice,
+        reasoning: `🛑 STOP LOSS: ${pnlPct.toFixed(1)}% loss (limit: -${profile.stopLossPct}%)`,
+      };
+    }
+
+    // 2. TAKE PROFIT — sell all when target reached
+    if (pnlPct >= profile.takeProfitPct) {
+      return {
+        action: "SELL", coinId: asset.id, symbol: asset.symbol,
+        amountUSD: posValue, confidence: 0.9, currentPrice: asset.currentPrice,
+        reasoning: `🎯 TAKE PROFIT: +${pnlPct.toFixed(1)}% (target: +${profile.takeProfitPct}%)`,
+      };
+    }
+
+    // 3. TRAILING STOP — if we were in profit but price dropped from peak
+    if (pnlPct > 0.5 && dropFromPeak >= profile.trailingStopPct) {
+      return {
+        action: "SELL", coinId: asset.id, symbol: asset.symbol,
+        amountUSD: posValue, confidence: 0.85, currentPrice: asset.currentPrice,
+        reasoning: `📉 TRAILING STOP: dropped ${dropFromPeak.toFixed(1)}% from peak $${position.peakPrice.toFixed(2)} (limit: ${profile.trailingStopPct}%)`,
+      };
+    }
+
+    // 4. TIME-BASED EXIT — sell losers after max hold time
+    if (holdHours > profile.maxHoldHours && pnlPct < 0.5) {
+      return {
+        action: "SELL", coinId: asset.id, symbol: asset.symbol,
+        amountUSD: posValue, confidence: 0.7, currentPrice: asset.currentPrice,
+        reasoning: `⏰ TIME EXIT: held ${holdHours.toFixed(0)}h (max: ${profile.maxHoldHours}h), P&L: ${pnlPct.toFixed(1)}%`,
+      };
+    }
+
+    // 5. PARTIAL PROFIT — sell 50% when halfway to take-profit
+    if (pnlPct >= profile.takeProfitPct * 0.5 && pnlPct < profile.takeProfitPct) {
+      // Only sell half once — check if we already partially sold
+      const halfValue = posValue * 0.5;
+      if (halfValue > 5) {
+        return {
+          action: "SELL", coinId: asset.id, symbol: asset.symbol,
+          amountUSD: halfValue, confidence: 0.75, currentPrice: asset.currentPrice,
+          reasoning: `💰 PARTIAL PROFIT: +${pnlPct.toFixed(1)}% — securing 50% at halfway to target`,
+        };
+      }
+    }
+
+    // 6. SIGNAL-BASED SELL — TA says sell (much looser threshold now)
+    if (compositeScore < -0.08 && confidence >= profile.minConfidence) {
+      const sellSignals = analysis.signals.filter((s) => s.signal === "SELL").map((s) => s.name);
+      return {
+        action: "SELL", coinId: asset.id, symbol: asset.symbol,
+        amountUSD: posValue, confidence, currentPrice: asset.currentPrice,
+        reasoning: `📊 SIGNAL SELL: score ${compositeScore.toFixed(2)} | RSI ${rsi.toFixed(0)} | ${sellSignals.join(", ")}`,
+      };
+    }
+
+    // 7. RSI OVERBOUGHT SELL — take profit when RSI > 70
+    if (rsi > 70 && pnlPct > 0) {
+      return {
+        action: "SELL", coinId: asset.id, symbol: asset.symbol,
+        amountUSD: posValue * 0.6, confidence: 0.7, currentPrice: asset.currentPrice,
+        reasoning: `📈 OVERBOUGHT: RSI ${rsi.toFixed(0)} > 70, locking in +${pnlPct.toFixed(1)}% profit`,
+      };
+    }
+  }
+
+  // ==================== BUY LOGIC ====================
   // Skip low confidence
   if (confidence < profile.minConfidence) {
     return {
       action: "HOLD", coinId: asset.id, symbol: asset.symbol,
       amountUSD: 0, confidence, currentPrice: asset.currentPrice,
-      reasoning: `Low confidence ${(confidence * 100).toFixed(0)}% < ${(profile.minConfidence * 100).toFixed(0)}% threshold`,
+      reasoning: `Low confidence ${(confidence * 100).toFixed(0)}% < ${(profile.minConfidence * 100).toFixed(0)}%`,
     };
   }
 
-  // Position sizing (modified Kelly)
-  const kellyFraction = Math.min(profile.maxPositionPct, confidence * 0.4);
-  const totalEquity = state.cashUSD + state.positions.reduce((s, p) => s + p.amount * p.currentPrice, 0);
-
-  // BUY signal
-  if (compositeScore > 0.15 && !position) {
+  // Only buy if we don't already hold this asset
+  if (!position && compositeScore > 0.1) {
+    const kellyFraction = Math.min(profile.maxPositionPct, confidence * 0.35);
     const maxSpend = Math.min(
       totalEquity * kellyFraction,
-      state.cashUSD * 0.9,
+      state.cashUSD * 0.85, // keep 15% cash reserve
       CONFIG.maxTradeUSD,
     );
-    if (maxSpend < 1) {
+
+    if (maxSpend < 5) {
       return { action: "HOLD", coinId: asset.id, symbol: asset.symbol, amountUSD: 0, confidence, currentPrice: asset.currentPrice, reasoning: "Insufficient cash" };
     }
 
@@ -252,52 +335,14 @@ function makeDecision(
     return {
       action: "BUY", coinId: asset.id, symbol: asset.symbol,
       amountUSD: maxSpend, confidence, currentPrice: asset.currentPrice,
-      reasoning: `Score ${compositeScore.toFixed(2)} | RSI ${rsi.toFixed(0)} | Signals: ${buySignals.join(",")}`,
+      reasoning: `Score ${compositeScore.toFixed(2)} | RSI ${rsi.toFixed(0)} | ${buySignals.join(", ")}`,
     };
-  }
-
-  // SELL signal (with stop-loss/take-profit)
-  if (position) {
-    const pnlPct = position.avgBuyPrice > 0
-      ? ((asset.currentPrice - position.avgBuyPrice) / position.avgBuyPrice) * 100
-      : 0;
-
-    // Stop loss
-    if (pnlPct <= -profile.stopLossPct) {
-      const sellUSD = position.amount * asset.currentPrice;
-      return {
-        action: "SELL", coinId: asset.id, symbol: asset.symbol,
-        amountUSD: sellUSD, confidence: 0.9, currentPrice: asset.currentPrice,
-        reasoning: `STOP LOSS: ${pnlPct.toFixed(1)}% < -${profile.stopLossPct}%`,
-      };
-    }
-
-    // Take profit
-    if (pnlPct >= profile.takeProfitPct) {
-      const sellUSD = position.amount * asset.currentPrice;
-      return {
-        action: "SELL", coinId: asset.id, symbol: asset.symbol,
-        amountUSD: sellUSD, confidence: 0.85, currentPrice: asset.currentPrice,
-        reasoning: `TAKE PROFIT: +${pnlPct.toFixed(1)}% >= +${profile.takeProfitPct}%`,
-      };
-    }
-
-    // Signal-based sell
-    if (compositeScore < -0.2) {
-      const sellUSD = position.amount * asset.currentPrice;
-      const sellSignals = analysis.signals.filter((s) => s.signal === "SELL").map((s) => s.name);
-      return {
-        action: "SELL", coinId: asset.id, symbol: asset.symbol,
-        amountUSD: sellUSD, confidence, currentPrice: asset.currentPrice,
-        reasoning: `Score ${compositeScore.toFixed(2)} | RSI ${rsi.toFixed(0)} | Signals: ${sellSignals.join(",")}`,
-      };
-    }
   }
 
   return {
     action: "HOLD", coinId: asset.id, symbol: asset.symbol,
     amountUSD: 0, confidence, currentPrice: asset.currentPrice,
-    reasoning: `Score ${compositeScore.toFixed(2)} — no action needed`,
+    reasoning: `Score ${compositeScore.toFixed(2)} — no action`,
   };
 }
 
@@ -369,6 +414,7 @@ async function executeTrade(
         symbol: decision.symbol, coinId: decision.coinId,
         amount: units, avgBuyPrice: decision.currentPrice,
         currentPrice: decision.currentPrice, unrealizedPnL: 0, unrealizedPnLPct: 0,
+        peakPrice: decision.currentPrice, openedAt: Date.now(),
       });
     }
 
@@ -449,13 +495,18 @@ async function runCycle(state: BotState, connection: Connection | null, keypair:
     return;
   }
 
-  // 2. Update current prices on positions
+  // 2. Update current prices on positions + track peak for trailing stop
   for (const pos of state.positions) {
     const asset = assets.find((a) => a.id === pos.coinId);
     if (asset) {
       pos.currentPrice = asset.currentPrice;
       pos.unrealizedPnL = (asset.currentPrice - pos.avgBuyPrice) * pos.amount;
       pos.unrealizedPnLPct = pos.avgBuyPrice > 0 ? ((asset.currentPrice - pos.avgBuyPrice) / pos.avgBuyPrice) * 100 : 0;
+      // Track peak price for trailing stop
+      if (!pos.peakPrice) pos.peakPrice = pos.avgBuyPrice;
+      if (asset.currentPrice > pos.peakPrice) pos.peakPrice = asset.currentPrice;
+      // Backfill openedAt for legacy positions
+      if (!pos.openedAt) pos.openedAt = Date.now();
     }
   }
 
@@ -495,18 +546,23 @@ async function runCycle(state: BotState, connection: Connection | null, keypair:
     }
   }
 
-  // 5. Execute the best BUY or SELL decision (one trade per cycle for safety)
+  // 5. Execute trades: ALL sells first (risk management), then best BUY
   const actionable = decisions.filter((d) => d.action !== "HOLD" && d.amountUSD > 0);
 
   if (actionable.length > 0) {
-    // Prioritize: SELL (risk management) > BUY (opportunities)
     const sells = actionable.filter((d) => d.action === "SELL").sort((a, b) => b.confidence - a.confidence);
     const buys = actionable.filter((d) => d.action === "BUY").sort((a, b) => b.confidence - a.confidence);
 
-    // Execute highest-confidence sell first, then buy
+    // Execute ALL sells — never delay risk management
+    for (const sell of sells) {
+      await executeTrade(sell, state, connection, keypair);
+    }
     if (sells.length > 0) {
-      await executeTrade(sells[0], state, connection, keypair);
-    } else if (buys.length > 0) {
+      log.info(`Executed ${sells.length} SELL(s) this cycle`);
+    }
+
+    // Execute best BUY (only 1 per cycle to avoid over-exposure)
+    if (buys.length > 0 && sells.length === 0) {
       await executeTrade(buys[0], state, connection, keypair);
     }
   } else {
